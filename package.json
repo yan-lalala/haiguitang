@@ -1,0 +1,9 @@
+{
+  "name": "yang-le-ge-yang",
+  "version": "1.0.0",
+  "description": "Sheep A Sheep Clone Game",
+  "type": "module",
+  "scripts": {
+    "test": "node test/test_game.js"
+  }
+}

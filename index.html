@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="pasture">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>羊了个羊 - 经典消除挑战</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <link rel="stylesheet" href="css/game.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-2 sm:p-6 flex flex-col items-center justify-start antialiased selection:bg-amber-300 selection:text-amber-900">
+
+  <!-- 顶部调试与主题控制栏 (适配 PC 与宽屏大屏) -->
+  <header class="w-full max-w-5xl mb-4 bg-slate-800/90 backdrop-blur border border-slate-700/80 rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-2xl shadow-inner">
+        🐑
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base sm:text-lg font-bold text-white tracking-wide">羊了个羊 (Sheep A Sheep)</h1>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">正式版 v1.0</span>
+        </div>
+        <p class="text-xs text-slate-400">多层深度遮挡 | 7格槽位收集 | 三大经典锦囊 | 羊群战队争霸</p>
+      </div>
+    </div>
+
+    <!-- 快捷操作区：皮肤主题切换 & 音效 -->
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <div class="flex items-center bg-slate-900/80 p-1 rounded-xl border border-slate-700">
+        <span class="text-slate-400 px-2">皮肤主题:</span>
+        <button onclick="window.game.applyTheme('pasture')" id="btn-theme-pasture" class="px-2.5 py-1 rounded-lg font-medium transition bg-amber-600 text-white shadow-sm">🌿 牧场</button>
+        <button onclick="window.game.applyTheme('sweet')" id="btn-theme-sweet" class="px-2.5 py-1 rounded-lg font-medium text-slate-300 hover:text-white transition">🍰 甜品</button>
+        <button onclick="window.game.applyTheme('cyber')" id="btn-theme-cyber" class="px-2.5 py-1 rounded-lg font-medium text-slate-300 hover:text-white transition">🌌 赛博</button>
+      </div>
+
+      <div class="flex items-center gap-1.5">
+        <button onclick="window.game.switchLevel()" class="px-3 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/40 rounded-xl font-medium transition flex items-center gap-1">
+          <span>⚡</span> 切换关卡
+        </button>
+        <button onclick="window.game.openModal('rank')" class="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/40 rounded-xl font-medium transition flex items-center gap-1">
+          <span>🚩</span> 羊圈榜单
+        </button>
+        <button onclick="toggleAudio()" id="btn-sound" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl font-medium transition flex items-center gap-1">
+          <span>🔊</span> 音效: 开
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主内容区：左侧手机游戏机身 + 右侧游戏指南与技巧 -->
+  <main class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+    <!-- ==================== 手机游戏模拟窗口 (占 7 列) ==================== -->
+    <section class="lg:col-span-7 flex flex-col items-center">
+      <!-- 手机机身外边框 -->
+      <div id="phone-wrapper" class="relative w-full max-w-[390px] h-[780px] bg-slate-950 rounded-[44px] p-3 shadow-2xl ring-1 ring-slate-800 ring-offset-4 ring-offset-slate-900 flex flex-col overflow-hidden">
+        
+        <!-- 灵动岛/听筒装饰 -->
+        <div class="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-4 bg-black rounded-full z-50 flex items-center justify-end px-3">
+          <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-800"></div>
+        </div>
+
+        <!-- 游戏内部主舞台容器 (换肤背景) -->
+        <div id="game-stage" class="relative flex-1 w-full rounded-[34px] overflow-hidden flex flex-col justify-between transition-colors duration-500 bg-[#7bc342]">
+          
+          <!-- 背景装饰：天空、云朵、阳光、草坪与栅栏 -->
+          <div id="bg-decorations" class="absolute inset-0 pointer-events-none overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-b from-sky-300/40 via-transparent to-emerald-600/20"></div>
+            <div class="cloud-slow absolute top-10 left-4 text-white/70 text-4xl select-none">☁️</div>
+            <div class="cloud-fast absolute top-16 right-6 text-white/50 text-5xl select-none">☁️</div>
+            <div class="absolute top-6 right-8 w-12 h-12 rounded-full bg-amber-200/50 blur-md"></div>
+            
+            <!-- 地面草丛与花朵 -->
+            <div class="absolute bottom-40 left-3 text-lg opacity-80">🌼</div>
+            <div class="absolute bottom-44 right-4 text-lg opacity-80">🌸</div>
+            <div class="absolute bottom-36 right-16 text-sm opacity-70">🌿</div>
+            <div class="absolute bottom-36 left-20 text-sm opacity-70">🌱</div>
+            <div class="absolute bottom-36 left-0 text-xl opacity-60">🪵🪵</div>
+            <div class="absolute bottom-36 right-0 text-xl opacity-60">🪵🪵</div>
+          </div>
+
+          <!-- ================= 1. 顶部 Header 状态栏 ================= -->
+          <div class="relative z-20 pt-7 px-4 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="bg-gradient-to-b from-amber-100 to-amber-200 border-2 border-amber-800/80 rounded-2xl px-3.5 py-1 shadow-md flex items-center gap-1.5">
+                <span class="text-xs">🚩</span>
+                <span id="level-badge" class="font-extrabold text-amber-950 text-sm tracking-wide">第 2 关</span>
+              </div>
+              <span id="difficulty-pill" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-sm border border-white/40">地狱模式 0.01%</span>
+            </div>
+
+            <!-- 右侧快捷重开/排行榜按钮 -->
+            <div class="flex items-center gap-1.5">
+              <button onclick="window.game.switchLevel()" title="切换简单/地狱难度" class="w-8 h-8 rounded-full bg-white/80 hover:bg-white border-2 border-emerald-800/40 text-slate-800 shadow flex items-center justify-center text-xs font-bold transition">
+                ⚡
+              </button>
+              <button onclick="window.game.restartCurrentLevel()" title="重新开始本关" class="w-8 h-8 rounded-full bg-white/80 hover:bg-white border-2 border-emerald-800/40 text-slate-800 shadow flex items-center justify-center text-xs font-bold transition">
+                🔄
+              </button>
+              <button onclick="window.game.openModal('rank')" title="全国羊群战队" class="px-2.5 h-8 rounded-full bg-white/80 hover:bg-white border-2 border-emerald-800/40 text-emerald-950 shadow flex items-center justify-center text-xs font-bold gap-1 transition">
+                <span>🐑</span>
+                <span class="text-[11px]">羊圈</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 关卡统计条 -->
+          <div class="relative z-10 px-4 mt-1 flex items-center justify-between text-[11px] font-bold text-emerald-950/85 drop-shadow-sm">
+            <div class="flex items-center gap-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+              <span>今日通关: <strong class="text-emerald-950" id="stat-pass">1,420</strong> 人</span>
+            </div>
+            <div>
+              <span>剩余卡牌: <strong class="text-amber-950 text-xs" id="stat-remain">48</strong> 张</span>
+            </div>
+          </div>
+
+          <!-- ================= 2. 牌桌核心交互区 (多层物理堆叠) ================= -->
+          <div class="relative flex-1 w-full mx-auto my-1 flex items-center justify-center overflow-hidden select-none">
+            <div id="board-container" class="relative w-[340px] h-[370px]">
+              <!-- 卡牌由 game.js 动态计算 AABB 遮挡与渲染 -->
+            </div>
+          </div>
+
+          <!-- ================= 3. 道具移出暂存区 (Holding Zone) ================= -->
+          <div class="relative z-10 px-4 flex items-center justify-center min-h-[52px]">
+            <div id="holding-zone" class="hidden items-center justify-center gap-2 bg-black/15 border-2 border-dashed border-white/40 rounded-2xl px-3 py-1.5 transition-all">
+              <span class="text-[10px] font-bold text-white/90 mr-1">暂存区:</span>
+              <div id="holding-slots" class="flex items-center gap-1.5">
+                <!-- 移出牌放置处 -->
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= 4. 底部 7格卡槽 (核心底座) ================= -->
+          <div class="relative z-20 px-3 pb-2 flex flex-col items-center">
+            <div class="flex items-center justify-between w-full max-w-[340px] px-1 mb-1 text-[10px] font-semibold text-emerald-950/80">
+              <span>收集槽位 (满7张失败)</span>
+              <span id="slot-counter" class="text-amber-950 font-bold">0 / 7</span>
+            </div>
+
+            <!-- 原木卡槽底托 -->
+            <div id="dock-container" class="w-full max-w-[350px] h-[64px] bg-[#deb887] border-[3px] border-[#8b5a2b] rounded-2xl shadow-xl flex items-center justify-between px-2.5 relative overflow-hidden">
+              <div class="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/15 pointer-events-none"></div>
+
+              <!-- 7个凹槽网格 -->
+              <div class="grid grid-cols-7 gap-1.5 w-full h-full py-1.5 relative z-10" id="dock-slots">
+                <div class="dock-cell rounded-xl bg-black/15 border border-black/20 shadow-inner"></div>
+                <div class="dock-cell rounded-xl bg-black/15 border border-black/20 shadow-inner"></div>
+                <div class="dock-cell rounded-xl bg-black/15 border border-black/20 shadow-inner"></div>
+                <div class="dock-cell rounded-xl bg-black/15 border border-black/20 shadow-inner"></div>
+                <div class="dock-cell rounded-xl bg-black/15 border border-black/20 shadow-inner"></div>
+                <div class="dock-cell rounded-xl bg-black/15 border border-black/20 shadow-inner"></div>
+                <div class="dock-cell rounded-xl bg-black/15 border border-black/20 shadow-inner"></div>
+              </div>
+
+              <!-- 实际动态落槽卡牌层 -->
+              <div id="dock-cards-layer" class="absolute inset-0 px-2.5 py-1.5 flex items-center gap-1.5 z-20 pointer-events-none">
+                <!-- 牌落入后动态渲染 -->
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= 5. 三大翻盘道具栏 ================= -->
+          <div class="relative z-20 px-4 pb-5 pt-1 flex items-center justify-around max-w-[340px] mx-auto w-full">
+            <!-- 道具 1: 移出3张 -->
+            <button onclick="window.game.useBooster('shift')" id="btn-booster-shift" class="group relative flex flex-col items-center cursor-pointer">
+              <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-b from-sky-300 to-sky-500 border-2 border-white shadow-lg flex items-center justify-center text-xl group-hover:scale-105 active:scale-95 transition">
+                <span>⤴️</span>
+                <span id="badge-shift" class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold border border-white flex items-center justify-center shadow">1</span>
+              </div>
+              <span class="text-[11px] font-bold text-emerald-950 drop-shadow-sm mt-1">移出前3张</span>
+            </button>
+
+            <!-- 道具 2: 撤回上一张 -->
+            <button onclick="window.game.useBooster('undo')" id="btn-booster-undo" class="group relative flex flex-col items-center cursor-pointer">
+              <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-b from-emerald-300 to-emerald-500 border-2 border-white shadow-lg flex items-center justify-center text-xl group-hover:scale-105 active:scale-95 transition">
+                <span>↩️</span>
+                <span id="badge-undo" class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold border border-white flex items-center justify-center shadow">1</span>
+              </div>
+              <span class="text-[11px] font-bold text-emerald-950 drop-shadow-sm mt-1">撤回上一步</span>
+            </button>
+
+            <!-- 道具 3: 桌面洗牌 -->
+            <button onclick="window.game.useBooster('shuffle')" id="btn-booster-shuffle" class="group relative flex flex-col items-center cursor-pointer">
+              <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 border-2 border-white shadow-lg flex items-center justify-center text-xl group-hover:scale-105 active:scale-95 transition">
+                <span>🔀</span>
+                <span id="badge-shuffle" class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold border border-white flex items-center justify-center shadow">1</span>
+              </div>
+              <span class="text-[11px] font-bold text-emerald-950 drop-shadow-sm mt-1">全局洗牌</span>
+            </button>
+          </div>
+
+          <!-- 特效爆炸粒子容器 -->
+          <div id="fx-layer" class="absolute inset-0 pointer-events-none z-40 overflow-hidden"></div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 右侧指南、玩法技巧与设计体系 (占 5 列) ==================== -->
+    <section class="lg:col-span-5 flex flex-col gap-4">
+      
+      <!-- 游戏核心玩法与技巧指南 -->
+      <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-5 shadow-lg">
+        <h2 class="text-base font-bold text-white flex items-center gap-2 mb-3">
+          <span class="p-1 rounded-lg bg-amber-500/20 text-amber-400">💡</span>
+          核心机制与通关破局技巧
+        </h2>
+
+        <div class="space-y-2.5 text-xs text-slate-300">
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-700/50">
+            <h3 class="font-bold text-amber-300 mb-1">1. 优先消核心大山峰</h3>
+            <p class="text-slate-400 leading-relaxed">
+              左右两侧的悬空堆牌层数较少，中央主金字塔厚度可达 4~5 层。应优先消耗中央深层卡牌，揭示更多隐藏牌面。
+            </p>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-700/50">
+            <h3 class="font-bold text-emerald-300 mb-1">2. 槽位严控 3~4 张警戒线</h3>
+            <p class="text-slate-400 leading-relaxed">
+              一旦卡槽堆积超过 4 张无消除，极容易瞬间暴毙。尽量保证每一次落槽都能在 1~2 步内凑齐三张消除。
+            </p>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-700/50">
+            <h3 class="font-bold text-sky-300 mb-1">3. 道具组合翻盘法则</h3>
+            <p class="text-slate-400 leading-relaxed">
+              在槽位满 6 张濒临死亡时，使用<b>「移出」</b>可腾出 3 个槽位；遇到牌面无解时，使用<b>「洗牌」</b>重新随机牌型打破死锁。
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 快捷键盘调试与操作提示 -->
+      <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-5 shadow-lg">
+        <h2 class="text-base font-bold text-white flex items-center gap-2 mb-3">
+          <span class="p-1 rounded-lg bg-indigo-500/20 text-indigo-400">⌨️</span>
+          快捷键支持 (PC/Mac)
+        </h2>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-700/40 flex items-center justify-between">
+            <span class="text-slate-300 font-medium">按键 [ 1 ]</span>
+            <span class="text-sky-300 font-bold">移出 3 张</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-700/40 flex items-center justify-between">
+            <span class="text-slate-300 font-medium">按键 [ 2 ]</span>
+            <span class="text-emerald-300 font-bold">撤回上一步</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-700/40 flex items-center justify-between">
+            <span class="text-slate-300 font-medium">按键 [ 3 ]</span>
+            <span class="text-amber-300 font-bold">全局洗牌</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-700/40 flex items-center justify-between">
+            <span class="text-slate-300 font-medium">按键 [ R ]</span>
+            <span class="text-rose-300 font-bold">重新开始</span>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ==================== 模态弹窗系统 (Victory / Defeat / Regional Rank) ==================== -->
+
+  <!-- 1. 胜利弹窗 -->
+  <div id="modal-victory" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="relative w-full max-w-sm bg-gradient-to-b from-amber-100 to-amber-200 border-4 border-amber-800/80 rounded-3xl p-6 text-center shadow-2xl animate-in fade-in zoom-in duration-200 text-amber-950">
+      <div class="w-24 h-24 mx-auto mb-2 relative">
+        <div class="text-7xl animate-bounce">🐑</div>
+        <div class="absolute -top-2 -right-2 text-3xl">👑</div>
+      </div>
+
+      <h3 class="text-2xl font-black text-amber-950 tracking-wider mb-1">恭喜加入羊群！</h3>
+      <p class="text-xs text-amber-800 mb-4">今日全国仅 <span class="font-bold text-rose-600">0.01%</span> 的天选之羊获此殊荣！</p>
+
+      <div class="bg-white/80 rounded-2xl p-3 border border-amber-300 mb-5 text-xs text-left space-y-1.5 shadow-inner">
+        <div class="flex justify-between">
+          <span class="text-slate-500">家乡羊队战绩:</span>
+          <span class="font-bold text-emerald-700">+1 羊 (已计入全国总榜)</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">获得称号:</span>
+          <span class="font-bold text-purple-700">🌟 牧场超神领头羊</span>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="window.game.closeModal('victory'); window.game.restartCurrentLevel();" class="flex-1 py-3 bg-gradient-to-b from-emerald-500 to-emerald-700 text-white font-bold rounded-2xl shadow-lg hover:brightness-110 active:scale-95 transition">
+          再战一局
+        </button>
+        <button onclick="window.game.closeModal('victory')" class="px-4 py-3 bg-amber-300 text-amber-900 font-bold rounded-2xl hover:bg-amber-400 transition">
+          关闭
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 失败弹窗 -->
+  <div id="modal-gameover" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="relative w-full max-w-sm bg-gradient-to-b from-slate-100 to-slate-200 border-4 border-slate-700 rounded-3xl p-6 text-center shadow-2xl animate-in fade-in zoom-in duration-200 text-slate-800">
+      <div class="w-20 h-20 mx-auto mb-2 text-6xl">😭</div>
+
+      <h3 class="text-2xl font-black text-slate-900 tracking-wide mb-1">槽位已满，未能入群</h3>
+      <p class="text-xs text-slate-600 mb-4">只差几张牌即可全消！立即使用复活移出槽位继续冲刺！</p>
+
+      <div class="flex flex-col gap-2.5">
+        <button onclick="window.game.revive()" class="w-full py-3 bg-gradient-to-b from-amber-400 to-amber-500 border-2 border-amber-600 text-amber-950 font-black text-sm rounded-2xl shadow-lg hover:brightness-105 active:scale-95 transition flex items-center justify-center gap-2">
+          <span>✨ 立即复活 (清空前3张)</span>
+        </button>
+        <button onclick="window.game.closeModal('gameover'); window.game.restartCurrentLevel();" class="w-full py-2.5 bg-slate-300 text-slate-700 font-bold text-xs rounded-2xl hover:bg-slate-400 transition">
+          放弃并重新开始
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 全国羊群排行榜弹窗 -->
+  <div id="modal-rank" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="relative w-full max-w-md bg-gradient-to-b from-amber-50 to-amber-100 border-4 border-amber-800/80 rounded-3xl p-5 shadow-2xl text-amber-950">
+      <div class="flex items-center justify-between mb-3 border-b border-amber-200 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🚩</span>
+          <h3 class="text-lg font-black">今日全国羊群战队榜</h3>
+        </div>
+        <button onclick="window.game.closeModal('rank')" class="w-7 h-7 rounded-full bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold flex items-center justify-center">✕</button>
+      </div>
+
+      <p class="text-[11px] text-amber-800 mb-3">为所在地区羊队出战，每通过一次第2关即可为家乡增加 1 只羊！</p>
+
+      <!-- 排行榜列表容器 -->
+      <div class="space-y-2 max-h-64 overflow-y-auto pr-1" id="rank-list-items">
+        <!-- 由 game.js 动态渲染 -->
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-amber-200 text-center">
+        <button onclick="window.game.closeModal('rank')" class="w-full py-2.5 bg-amber-800 text-amber-100 rounded-xl font-bold text-xs hover:bg-amber-900 transition">
+          返回游戏为家乡冲榜
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 游戏驱动脚本入口 -->
+  <script type="module">
+    import { game } from './js/game.js';
+    import { sound } from './js/audio.js';
+
+    window.game = game;
+    window.sound = sound;
+
+    window.toggleAudio = function() {
+      const enabled = sound.toggle();
+      const btn = document.getElementById('btn-sound');
+      if (btn) {
+        btn.innerHTML = enabled ? '<span>🔊</span> 音效: 开' : '<span>🔇</span> 音效: 关';
+      }
+    };
+
+    // 页面就绪后初始化游戏
+    window.addEventListener('DOMContentLoaded', () => {
+      game.init();
+    });
+  </script>
+</body>
+</html>

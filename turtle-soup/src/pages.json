@@ -1,0 +1,17 @@
+{
+	"pages": [
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "庄园迷雾 · 绝密海龟汤",
+				"navigationStyle": "custom"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "white",
+		"navigationBarTitleText": "庄园迷雾 · 绝密海龟汤",
+		"navigationBarBackgroundColor": "#14121a",
+		"backgroundColor": "#0d0c11"
+	}
+}

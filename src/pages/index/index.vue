@@ -1,7 +1,7 @@
 <template>
   <view class="gothic-container">
-    <!-- 迷雾暗角全局滤镜 -->
-    <view class="vignette-overlay"></view>
+    <!-- 迷雾暗角全局滤镜 (理智值危急时触发血色心跳脉冲) -->
+    <view class="vignette-overlay" :class="{ 'vignette-danger': sanValue <= 30 }"></view>
 
     <!-- 顶部庄园档案栏 -->
     <view class="manor-header">
@@ -15,6 +15,11 @@
       </view>
 
       <view class="header-actions">
+        <!-- 音效开关按钮 -->
+        <view class="sound-toggle-btn" @tap="toggleSound" :title="isMuted ? '已静音' : '音效开启'">
+          <text class="sound-icon">{{ isMuted ? '🔇' : '🔊' }}</text>
+        </view>
+
         <!-- 双人组队状态药丸 -->
         <view class="coop-badge" :class="{ inroom: isMultiplayer }" @tap="showCoopModal = true">
           <text class="coop-icon">{{ isMultiplayer ? '👥' : '🕯️' }}</text>
@@ -39,6 +44,17 @@
           <view class="danger-level">
             <text class="danger-label">诡秘度</text>
             <text class="star-rating">{{ currentSoup.difficulty }}</text>
+          </view>
+        </view>
+
+        <!-- 理智值 (SAN) 条 -->
+        <view class="san-bar-container">
+          <view class="san-header">
+            <text class="san-label">🧠 调查员理智 (SAN)</text>
+            <text class="san-value" :class="{ 'san-critical': sanValue <= 30 }">{{ sanValue }} / 100</text>
+          </view>
+          <view class="san-track">
+            <view class="san-fill" :style="{ width: sanValue + '%' }" :class="sanStatusClass"></view>
           </view>
         </view>
 
@@ -382,6 +398,7 @@
 import { SOUPS } from '../../data/soups.js';
 import { judgeQuestion, evaluateTruthAttempt } from '../../utils/judge.js';
 import { manorSocket } from '../../utils/socket.js';
+import { manorAudio } from '../../utils/audio.js';
 
 export default {
   data() {
@@ -394,6 +411,10 @@ export default {
       truthAttemptInput: '',
       isThinking: false,
       scrollTop: 99999,
+
+      // 理智值与音效系统
+      sanValue: 100,
+      isMuted: false,
 
       showCaseSelector: false,
       showSettings: false,
@@ -421,6 +442,11 @@ export default {
   computed: {
     currentSoup() {
       return this.allSoups[this.currentSoupIndex] || this.allSoups[0];
+    },
+    sanStatusClass() {
+      if (this.sanValue > 60) return 'san-safe';
+      if (this.sanValue > 30) return 'san-warning';
+      return 'san-danger';
     },
     suggestedQuestions() {
       if (this.currentSoup.id === 'case_001') {
@@ -601,6 +627,13 @@ export default {
       if (j === '是也不是') return '【 亦真亦幻 】';
       return '【 无涉此案 】';
     },
+    toggleSound() {
+      this.isMuted = manorAudio.toggleMute();
+      uni.showToast({
+        title: this.isMuted ? '🔇 庄园归于死寂 (静音)' : '🔊 庄园回响已苏醒 (音效)',
+        icon: 'none'
+      });
+    },
     useQuickHint(hint) {
       this.inputQuestion = hint;
       this.sendQuestion();
@@ -608,6 +641,13 @@ export default {
     async sendQuestion() {
       const q = this.inputQuestion.trim();
       if (!q || this.isThinking) return;
+
+      // 播放打字机机械敲击声与轻触震动
+      manorAudio.playTypewriter();
+      try { uni.vibrateShort({ type: 'light' }); } catch (e) {}
+
+      // 发问扣除 5 点基础理智
+      this.sanValue = Math.max(0, this.sanValue - 5);
 
       this.inputQuestion = '';
       this.isThinking = true;
@@ -621,11 +661,28 @@ export default {
           apiConfig: this.apiConfig
         });
 
+        // 判词音效（真：银铃，伪：木槌，无涉：沙沙）
+        manorAudio.playVerdict(res.judgment);
+
+        // 若完全无涉案情，额外扣除 3 点理智
+        if (res.judgment === '无关') {
+          this.sanValue = Math.max(0, this.sanValue - 3);
+        }
+
         let newClue = null;
         if (res.newClue && !this.unlockedClueIds.includes(res.newClue.id)) {
           newClue = res.newClue;
           this.unlockedClueIds.push(newClue.id);
-          try { uni.vibrateShort(); } catch (e) {}
+
+          // 核心爽点：锁链崩断 + 重重心跳轰鸣！连续双震动！
+          manorAudio.playClueUnlock();
+          try {
+            uni.vibrateShort();
+            setTimeout(() => { try { uni.vibrateShort(); } catch (e) {} }, 160);
+          } catch (e) {}
+
+          // 点亮关键疑点：理智回血 20 点！
+          this.sanValue = Math.min(100, this.sanValue + 20);
         }
 
         const record = {
@@ -700,7 +757,10 @@ export default {
         if (evalRes.passed) {
           this.finalScore = evalRes.score;
           this.showCaseSolvedModal = true;
+          // 敲响庄园终局教堂晚钟！
+          manorAudio.playChurchBell();
         } else {
+          manorAudio.playVerdict('否');
           uni.showModal({
             title: `推演吻合度: ${evalRes.score}%`,
             content: evalRes.summary,
@@ -718,6 +778,7 @@ export default {
         this.currentSoupIndex = idx;
         this.unlockedClueIds = [];
         this.history = [];
+        this.sanValue = 100;
         this.showCaseSelector = false;
 
         if (this.isMultiplayer) {
@@ -778,6 +839,21 @@ export default {
   pointer-events: none;
   box-shadow: inset 0 0 100rpx 40rpx rgba(0, 0, 0, 0.85);
   z-index: 1;
+  transition: all 0.5s ease;
+}
+
+/* 低理智 (SAN <= 30) 危险红光心跳脉冲 */
+.vignette-overlay.vignette-danger {
+  animation: pulse-danger 1.2s infinite alternate;
+}
+
+@keyframes pulse-danger {
+  0% {
+    box-shadow: inset 0 0 110rpx 50rpx rgba(185, 28, 28, 0.55);
+  }
+  100% {
+    box-shadow: inset 0 0 160rpx 80rpx rgba(220, 38, 38, 0.85);
+  }
 }
 
 /* ---------------- 庄园顶栏 ---------------- */
@@ -835,6 +911,23 @@ export default {
   display: flex;
   align-items: center;
   gap: 12rpx;
+}
+
+/* 音效开关按钮 */
+.sound-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #201a14;
+  border: 1px solid #5a4631;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.5);
+}
+
+.sound-icon {
+  font-size: 24rpx;
 }
 
 /* 双人组队徽章 */
@@ -964,6 +1057,73 @@ export default {
   font-size: 24rpx;
   color: #d97706;
   letter-spacing: 2rpx;
+}
+
+/* 理智值 (SAN) 槽位 */
+.san-bar-container {
+  background: rgba(13, 12, 17, 0.7);
+  border: 1px solid #4a3b2b;
+  border-radius: 8rpx;
+  padding: 10rpx 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.san-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.san-label {
+  font-size: 20rpx;
+  color: #bfae98;
+  font-weight: bold;
+}
+
+.san-value {
+  font-size: 22rpx;
+  color: #22c55e;
+  font-weight: 800;
+  font-family: monospace;
+}
+
+.san-value.san-critical {
+  color: #ef4444;
+  animation: flicker-red 0.8s infinite alternate;
+}
+
+@keyframes flicker-red {
+  0% { opacity: 0.6; text-shadow: 0 0 2rpx #ef4444; }
+  100% { opacity: 1; text-shadow: 0 0 10rpx #dc2626; }
+}
+
+.san-track {
+  height: 8rpx;
+  background: #1e1922;
+  border-radius: 4rpx;
+  overflow: hidden;
+  border: 1px solid #33261f;
+}
+
+.san-fill {
+  height: 100%;
+  transition: width 0.4s ease, background 0.4s ease;
+}
+
+.san-fill.san-safe {
+  background: linear-gradient(90deg, #15803d, #22c55e);
+  box-shadow: 0 0 8rpx #22c55e;
+}
+
+.san-fill.san-warning {
+  background: linear-gradient(90deg, #b45309, #f59e0b);
+  box-shadow: 0 0 8rpx #f59e0b;
+}
+
+.san-fill.san-danger {
+  background: linear-gradient(90deg, #991b1b, #ef4444);
+  box-shadow: 0 0 12rpx #ef4444;
 }
 
 .case-script-box {

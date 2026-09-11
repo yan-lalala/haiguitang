@@ -1,5 +1,5 @@
 <template>
-  <view class="gothic-container">
+  <view class="gothic-container" @touchstart="handleUserGesture" @click="handleUserGesture">
     <!-- 迷雾暗角全局滤镜 (理智值危急时触发血色心跳脉冲) -->
     <view class="vignette-overlay" :class="{ 'vignette-danger': sanValue <= 30 }"></view>
 
@@ -15,9 +15,15 @@
       </view>
 
       <view class="header-actions">
-        <!-- 音效开关按钮 -->
-        <view class="sound-toggle-btn" @tap="toggleSound" :title="isMuted ? '已静音' : '音效开启'">
-          <text class="sound-icon">{{ isMuted ? '🔇' : '🔊' }}</text>
+        <!-- 核心音效试听按钮 (点击必定发声) -->
+        <view class="sound-test-pill" @tap.stop="listenTestSound" title="试听全套庄园音效">
+          <text class="sound-pulse-icon">🔔</text>
+          <text class="sound-pill-txt">试听音效</text>
+        </view>
+
+        <!-- 静音切换按钮 -->
+        <view class="sound-mute-btn" @tap.stop="toggleSound" :class="{ muted: isMuted }" :title="isMuted ? '解除静音' : '静音'">
+          <text class="mute-icon">{{ isMuted ? '🔇' : '🔊' }}</text>
         </view>
 
         <!-- 双人组队状态药丸 -->
@@ -396,27 +402,97 @@
       </view>
     </view>
 
-    <!-- 模态框 6：绝密档案海报预览与保存 -->
+    <!-- 模态框 6：绝密档案海报完整长图预览与保存 -->
     <view class="gothic-modal-mask" v-if="showPosterModal" @tap="showPosterModal = false">
       <view class="poster-preview-box" @tap.stop>
         <view class="modal-gothic-header">
-          <text class="modal-gothic-title">📜 庄园结案封缄档案</text>
+          <text class="modal-gothic-title">📜 绝密档案封缄战报</text>
           <text class="modal-dismiss" @tap="showPosterModal = false">✕</text>
         </view>
 
-        <!-- 海报 Canvas 渲染展示区 -->
-        <view class="canvas-wrapper">
+        <!-- 海报完整预览滚动区 (所见即所得，从头到尾绝不截断) -->
+        <scroll-view scroll-y class="poster-scroll-wrapper">
+          <view class="poster-scroll-content">
+            <!-- 庄园眉首 -->
+            <view class="p-manor-sign">
+              <text class="p-sign-en">🗝️  E U R Y D I C E   M A N O R  🗝️</text>
+              <text class="p-sign-sub">—— 绝 密 案 卷 结 案 卷 宗 ——</text>
+            </view>
+
+            <!-- 案件标题与诡秘星级 -->
+            <view class="p-case-header">
+              <text class="p-case-title">《 {{ currentSoup.title }} 》</text>
+              <text class="p-case-badge">[ {{ currentSoup.category }} ] · 诡秘度 {{ currentSoup.difficulty }}</text>
+            </view>
+
+            <!-- 倾斜鲜红火漆钢印 -->
+            <view class="p-stamp-outer">
+              <view class="p-stamp-box">
+                <text class="p-stamp-en">CASE CLOSED</text>
+                <text class="p-stamp-cn">真 相 大 白 · 逃 出 庄 园</text>
+              </view>
+            </view>
+
+            <!-- 战绩 4 格仪表盘 -->
+            <view class="p-stats-grid">
+              <view class="p-stat-box">
+                <text class="p-stat-val color-amber">{{ finalScore }}%</text>
+                <text class="p-stat-lbl">推演契合度</text>
+              </view>
+              <view class="p-stat-box">
+                <text class="p-stat-val color-sky">{{ history.length }}</text>
+                <text class="p-stat-lbl">发问质询</text>
+              </view>
+              <view class="p-stat-box">
+                <text class="p-stat-val color-green">{{ sanValue }}</text>
+                <text class="p-stat-lbl">幸存理智</text>
+              </view>
+              <view class="p-stat-box">
+                <text class="p-stat-val color-pink">{{ unlockedClueIds.length }}/{{ currentSoup.clues.length }}</text>
+                <text class="p-stat-lbl">解开疑团</text>
+              </view>
+            </view>
+
+            <!-- 哲学金句卡片 (小红书精粹) -->
+            <view class="p-quote-card">
+              <text class="p-quote-mark">“</text>
+              <text class="p-quote-body">{{ currentSoup.quote || '迷雾终将散尽，真相永不沉沦。' }}</text>
+              <text class="p-quote-mark-r">”</text>
+            </view>
+
+            <!-- 案情始末真相全貌 -->
+            <view class="p-truth-card">
+              <text class="p-truth-title">【案情始末真相】</text>
+              <text class="p-truth-content">{{ currentSoup.truth }}</text>
+            </view>
+
+            <!-- 底部调查员签名与日期 -->
+            <view class="p-footer-row">
+              <view class="p-footer-left">
+                <text class="p-investigator-name">首席调查员：{{ myPlayerName }}</text>
+                <text class="p-archive-date">卷宗封存日期：{{ getTodayDate() }}</text>
+              </view>
+              <view class="p-footer-right">
+                <text class="p-brand-tag">海 龟 汤 探 案 馆</text>
+                <text class="p-qr-hint">微信搜索 · 扫码共破绝密案卷</text>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+
+        <!-- 离屏 Canvas (负责真实生成完整高像素长图并保存到本地) -->
+        <view class="offscreen-canvas-holder">
           <canvas
             canvas-id="posterCanvas"
             id="posterCanvas"
-            class="poster-canvas-el"
+            style="width: 640px; height: 1020px;"
           ></canvas>
         </view>
 
         <!-- 保存按钮 -->
         <view class="poster-actions">
           <button class="save-poster-btn" @tap="savePoster">
-            📥 保存海报至相册
+            📥 保存高清海报至相册
           </button>
         </view>
       </view>
@@ -500,6 +576,18 @@ export default {
 
     // 绑定 WebSocket 协同事件
     this.setupSocketListeners();
+  },
+  mounted() {
+    // #ifdef H5
+    if (typeof window !== 'undefined') {
+      const unlockAudio = () => {
+        manorAudio.unlock();
+      };
+      ['click', 'touchstart', 'keydown'].forEach(evt => {
+        window.addEventListener(evt, unlockAudio, { passive: true });
+      });
+    }
+    // #endif
   },
   methods: {
     setupSocketListeners() {
@@ -659,12 +747,28 @@ export default {
       if (j === '是也不是') return '【 亦真亦幻 】';
       return '【 无涉此案 】';
     },
+    handleUserGesture() {
+      manorAudio.unlock();
+    },
+    listenTestSound() {
+      this.isMuted = false;
+      manorAudio.playTestSound();
+      uni.showToast({
+        title: '🔊 正在试听：打字机 ➔ 裁决银铃 ➔ 庄园晚钟',
+        icon: 'none',
+        duration: 2500
+      });
+    },
     toggleSound() {
       this.isMuted = manorAudio.toggleMute();
       uni.showToast({
-        title: this.isMuted ? '🔇 庄园归于死寂 (静音)' : '🔊 庄园回响已苏醒 (音效)',
+        title: this.isMuted ? '🔇 已开启静音' : '🔊 已恢复庄园音效',
         icon: 'none'
       });
+    },
+    getTodayDate() {
+      const today = new Date();
+      return `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
     },
     useQuickHint(hint) {
       this.inputQuestion = hint;
@@ -854,6 +958,27 @@ export default {
     },
     savePoster() {
       uni.showLoading({ title: '正在封缄印鉴...' });
+
+      // #ifdef H5
+      try {
+        const canvasEl = document.getElementById('posterCanvas') || document.querySelector('canvas[canvas-id="posterCanvas"]') || document.querySelector('canvas');
+        if (canvasEl && typeof canvasEl.toDataURL === 'function') {
+          const dataUrl = canvasEl.toDataURL('image/png');
+          const a = document.createElement('a');
+          a.href = dataUrl;
+          a.download = `欧律狄刻庄园绝密战报_${this.currentSoup.title}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          uni.hideLoading();
+          uni.showToast({ title: '已下载绝密战报高清长图！', icon: 'success' });
+          return;
+        }
+      } catch (e) {
+        console.warn('H5 canvas direct export fallback:', e);
+      }
+      // #endif
+
       uni.canvasToTempFilePath({
         canvasId: 'posterCanvas',
         destWidth: 1280,
@@ -886,7 +1011,9 @@ export default {
           const a = document.createElement('a');
           a.href = res.tempFilePath;
           a.download = `欧律狄刻庄园结案战报_${this.currentSoup.title}.png`;
+          document.body.appendChild(a);
           a.click();
+          document.body.removeChild(a);
           uni.showToast({ title: '已触发海报下载！', icon: 'success' });
           // #endif
         },
@@ -909,6 +1036,11 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  max-width: 540px;
+  margin: 0 auto;
+  border-left: 2rpx solid #362a1c;
+  border-right: 2rpx solid #362a1c;
+  box-shadow: 0 0 100rpx rgba(0, 0, 0, 0.95), 0 0 30rpx rgba(185, 28, 28, 0.15);
   background-color: #0d0c11;
   background-image: 
     radial-gradient(ellipse at 50% 0%, rgba(56, 38, 64, 0.45) 0%, rgba(13, 12, 17, 0.95) 75%),
@@ -1003,8 +1135,39 @@ export default {
   gap: 12rpx;
 }
 
-/* 音效开关按钮 */
-.sound-toggle-btn {
+/* 核心音效试听胶囊 */
+.sound-test-pill {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  background: linear-gradient(135deg, #b45309, #78350f);
+  border: 1px solid #f59e0b;
+  padding: 6rpx 16rpx;
+  border-radius: 30rpx;
+  box-shadow: 0 2rpx 10rpx rgba(245, 158, 11, 0.35);
+  cursor: pointer;
+  animation: pulse-ring 2.5s infinite ease-in-out;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.97); opacity: 0.9; }
+  50% { transform: scale(1.03); opacity: 1; box-shadow: 0 0 14rpx rgba(245, 158, 11, 0.6); }
+  100% { transform: scale(0.97); opacity: 0.9; }
+}
+
+.sound-pulse-icon {
+  font-size: 22rpx;
+}
+
+.sound-pill-txt {
+  font-size: 20rpx;
+  font-weight: 900;
+  color: #fef08a;
+  letter-spacing: 1rpx;
+}
+
+/* 静音切换按钮 */
+.sound-mute-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1014,9 +1177,15 @@ export default {
   height: 52rpx;
   border-radius: 50%;
   box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.5);
+  cursor: pointer;
 }
 
-.sound-icon {
+.sound-mute-btn.muted {
+  border-color: #8c2323;
+  background: #2a1616;
+}
+
+.mute-icon {
   font-size: 24rpx;
 }
 
@@ -2268,32 +2437,269 @@ export default {
 
 /* ---------------- 绝密档案海报模态框 ---------------- */
 .poster-preview-box {
-  width: 100%;
-  max-width: 640rpx;
-  background: #19140e;
-  background-image: linear-gradient(to bottom, #201912, #14100b);
-  border: 3rpx solid #73593b;
+  width: 92vw;
+  max-width: 600rpx;
+  max-height: 88vh;
+  background: #18130e;
+  background-image: linear-gradient(180deg, #221a12 0%, #140f0a 100%);
+  border: 3rpx solid #7a5c3a;
   border-radius: 16rpx;
-  padding: 28rpx;
-  box-shadow: 0 24rpx 60rpx rgba(0,0,0,0.9);
+  padding: 24rpx;
+  box-shadow: 0 24rpx 70rpx rgba(0,0,0,0.95), inset 0 0 30rpx rgba(0,0,0,0.8);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  position: relative;
+  box-sizing: border-box;
 }
 
-.canvas-wrapper {
-  width: 560rpx;
-  height: 890rpx;
-  border-radius: 10rpx;
-  overflow: hidden;
-  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.8);
+.poster-scroll-wrapper {
+  flex: 1;
+  height: 0;
+  min-height: 0;
+  max-height: 66vh;
+  overflow-y: auto;
+  margin-bottom: 20rpx;
+  border-radius: 12rpx;
   border: 2rpx solid #4a3825;
+  background: #120e0a;
+  box-shadow: inset 0 0 24rpx rgba(0,0,0,0.8);
+}
+
+.poster-scroll-content {
+  padding: 28rpx 24rpx;
+  background: #17120c;
+  background-image: 
+    linear-gradient(to bottom, rgba(32, 24, 16, 0.95), rgba(18, 14, 9, 0.98)),
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.01) 0, rgba(255,255,255,0.01) 2px, transparent 0, transparent 8px);
+  border: 2rpx dashed #59442e;
+  border-radius: 10rpx;
+}
+
+.p-manor-sign {
+  text-align: center;
+  margin-bottom: 16rpx;
+  border-bottom: 1px solid #3d2f20;
+  padding-bottom: 12rpx;
+}
+
+.p-sign-en {
+  font-size: 20rpx;
+  font-weight: 900;
+  color: #c9a777;
+  letter-spacing: 4rpx;
+  display: block;
+}
+
+.p-sign-sub {
+  font-size: 18rpx;
+  color: #7d654c;
+  letter-spacing: 6rpx;
+  margin-top: 4rpx;
+  display: block;
+}
+
+.p-case-header {
+  text-align: center;
+  margin-bottom: 18rpx;
+}
+
+.p-case-title {
+  font-size: 34rpx;
+  font-weight: 900;
+  color: #f3e5d0;
+  letter-spacing: 2rpx;
+  display: block;
+  text-shadow: 0 2rpx 10rpx rgba(0,0,0,0.9);
+}
+
+.p-case-badge {
+  font-size: 20rpx;
+  color: #d97706;
+  margin-top: 6rpx;
+  display: block;
+}
+
+.p-stamp-outer {
+  display: flex;
+  justify-content: center;
+  margin: 16rpx 0 24rpx 0;
+}
+
+.p-stamp-box {
+  border: 4rpx solid #dc2626;
+  background: rgba(220, 38, 38, 0.12);
+  padding: 8rpx 28rpx;
+  border-radius: 8rpx;
+  transform: rotate(-5deg);
+  box-shadow: 0 0 16rpx rgba(220, 38, 38, 0.35);
+  text-align: center;
+}
+
+.p-stamp-en {
+  font-size: 32rpx;
+  font-weight: 900;
+  color: #ef4444;
+  letter-spacing: 4rpx;
+  display: block;
+  font-family: Georgia, serif;
+}
+
+.p-stamp-cn {
+  font-size: 18rpx;
+  color: #f87171;
+  letter-spacing: 4rpx;
+  display: block;
+  margin-top: 2rpx;
+}
+
+.p-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12rpx;
   margin-bottom: 24rpx;
 }
 
-.poster-canvas-el {
-  width: 560rpx;
-  height: 890rpx;
+.p-stat-box {
+  background: #1f1811;
+  border: 1px solid #4a3824;
+  border-radius: 8rpx;
+  padding: 12rpx 4rpx;
+  text-align: center;
+}
+
+.p-stat-val {
+  font-size: 28rpx;
+  font-weight: 900;
+  display: block;
+  font-family: monospace;
+}
+
+.p-stat-val.color-amber { color: #f59e0b; }
+.p-stat-val.color-sky { color: #38bdf8; }
+.p-stat-val.color-green { color: #22c55e; }
+.p-stat-val.color-pink { color: #ec4899; }
+
+.p-stat-lbl {
+  font-size: 18rpx;
+  color: #9c8871;
+  margin-top: 4rpx;
+  display: block;
+}
+
+.p-quote-card {
+  background: #1c150e;
+  border: 1px solid #5a442e;
+  border-radius: 8rpx;
+  padding: 18rpx 20rpx;
+  margin-bottom: 20rpx;
+  position: relative;
+  text-align: center;
+}
+
+.p-quote-mark {
+  font-size: 36rpx;
+  color: #8c2323;
+  font-weight: bold;
+  float: left;
+  line-height: 1;
+}
+
+.p-quote-mark-r {
+  font-size: 36rpx;
+  color: #8c2323;
+  font-weight: bold;
+  float: right;
+  line-height: 1;
+}
+
+.p-quote-body {
+  font-size: 22rpx;
+  color: #fde68a;
+  font-style: italic;
+  line-height: 1.5;
+  display: inline-block;
+  padding: 0 10rpx;
+}
+
+.p-truth-card {
+  background: #100d09;
+  border: 1px solid #3d2f20;
+  border-radius: 8rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  text-align: left;
+}
+
+.p-truth-title {
+  font-size: 20rpx;
+  color: #dc2626;
+  font-weight: 900;
+  display: block;
+  margin-bottom: 10rpx;
+}
+
+.p-truth-content {
+  font-size: 22rpx;
+  color: #d6c6b2;
+  line-height: 1.6;
+  display: block;
+}
+
+.p-footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #3d2f20;
+  padding-top: 16rpx;
+  margin-top: 10rpx;
+}
+
+.p-footer-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.p-investigator-name {
+  font-size: 20rpx;
+  color: #eed9b3;
+  font-weight: bold;
+}
+
+.p-archive-date {
+  font-size: 18rpx;
+  color: #8a7761;
+  margin-top: 4rpx;
+}
+
+.p-footer-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.p-brand-tag {
+  font-size: 20rpx;
+  color: #f59e0b;
+  font-weight: 900;
+  letter-spacing: 2rpx;
+}
+
+.p-qr-hint {
+  font-size: 16rpx;
+  color: #786550;
+  margin-top: 4rpx;
+}
+
+/* 离屏 Canvas (完全脱离文档流，不干扰弹窗) */
+.offscreen-canvas-holder {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 640px;
+  height: 1020px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -999;
 }
 
 .poster-actions {
@@ -2304,10 +2710,11 @@ export default {
   background: linear-gradient(135deg, #dc2626, #991b1b);
   border: 2rpx solid #f87171;
   color: #ffffff;
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 900;
   letter-spacing: 2rpx;
   border-radius: 10rpx;
+  padding: 10rpx 0;
   box-shadow: 0 6rpx 20rpx rgba(220, 38, 38, 0.5);
 }
 </style>

@@ -1,218 +1,313 @@
 /**
- * 庄园哥特音效引擎 (Manor Audio Engine)
- * 基于 Web Audio API 程序化纯算法合成，零外部资源依赖，极低体积，毫秒级响应
- * 包含：打字机机械敲击、火漆裁决印章声、【真】银铃、【伪】木槌、线索破案心跳轰鸣、庄园晚钟
+ * 庄园哥特音效引擎 (Manor Audio Engine) - 完美落地增强版
+ * 跨端支持 H5 浏览器与微信小程序 WebAudio
+ * 采用专业声学合成：机械打字机撞击、审判银铃、沉重法官木槌、心跳心悸、教堂晚钟
  */
 
 class ManorAudioEngine {
   constructor() {
     this.ctx = null;
     this.muted = false;
-    this.initialized = false;
+    this.unlocked = false;
   }
 
-  init() {
-    if (this.initialized) return;
+  /**
+   * 初始化并激活 AudioContext (解决浏览器 Autoplay 拦截)
+   */
+  unlock() {
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-        this.initialized = true;
+      if (!this.ctx) {
+        let AudioCtx = null;
+        if (typeof window !== 'undefined') {
+          AudioCtx = window.AudioContext || window.webkitAudioContext;
+        } else if (typeof wx !== 'undefined' && wx.createWebAudioContext) {
+          this.ctx = wx.createWebAudioContext();
+          this.unlocked = true;
+          return this.ctx;
+        }
+        if (AudioCtx) {
+          this.ctx = new AudioCtx();
+        }
+      }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().then(() => {
+          this.unlocked = true;
+        }).catch(() => {});
+      } else if (this.ctx) {
+        this.unlocked = true;
       }
     } catch (e) {
-      console.warn('当前环境不支持 Web Audio API');
+      console.warn('AudioContext unlock notice:', e);
     }
-  }
-
-  ensureContext() {
-    this.init();
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
-    }
+    return this.ctx;
   }
 
   toggleMute() {
+    this.unlock();
     this.muted = !this.muted;
     return this.muted;
   }
 
   /**
-   * 1. 打字机机械按键声 (敲击键盘/发问)
+   * 试听音效专有通道：强制解静音并依次播放打字机与大捷银铃
    */
-  playTypewriter() {
-    if (this.muted) return;
-    this.ensureContext();
-    if (!this.ctx) return;
-
-    const t = this.ctx.currentTime;
-    
-    // 瞬态机械敲击声 (Noise burst + Highpass)
-    const bufferSize = this.ctx.sampleRate * 0.03;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.2));
+  async playTestSound() {
+    this.muted = false;
+    this.unlock();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume();
+      } catch (e) {}
     }
+    // 步骤1：机械打字机双击
+    this.playTypewriter();
+    setTimeout(() => {
+      this.playTypewriter();
+    }, 120);
 
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
+    // 步骤2：真相审判空灵银铃
+    setTimeout(() => {
+      this.playVerdict('是');
+    }, 280);
 
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1400 + Math.random() * 300, t);
-    filter.Q.setValueAtTime(3, t);
-
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.35, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
-
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.ctx.destination);
-
-    noise.start(t);
+    // 步骤3：庄园深沉教堂晚钟
+    setTimeout(() => {
+      this.playChurchBell();
+    }, 600);
   }
 
   /**
-   * 2. 火漆判决声
-   * @param {string} judgment '是' | '否' | '无关' | '是也不是'
+   * 1. 机械打字机按键撞击声 (金属连杆 + 键帽触底木感)
+   */
+  playTypewriter() {
+    if (this.muted) return;
+    this.unlock();
+    if (!this.ctx) return;
+
+    try {
+      const t = Math.max(this.ctx.currentTime || 0, 0.001) + 0.01;
+
+      // 击键高频瞬态 (白噪声脉冲)
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.06);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
+      }
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(2200, t);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.95, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noise.start(t);
+
+      // 键帽触底机械沉闷撞击
+      const osc = this.ctx.createOscillator();
+      const oscGain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(360, t);
+      osc.frequency.exponentialRampToValueAtTime(90, t + 0.05);
+
+      oscGain.gain.setValueAtTime(0.7, t);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+
+      osc.connect(oscGain);
+      oscGain.connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.06);
+    } catch (e) {
+      console.warn('Typewriter audio error:', e);
+    }
+  }
+
+  /**
+   * 2. 审讯判词音效
    */
   playVerdict(judgment) {
     if (this.muted) return;
-    this.ensureContext();
+    this.unlock();
     if (!this.ctx) return;
 
-    const t = this.ctx.currentTime;
+    try {
+      const t = Math.max(this.ctx.currentTime || 0, 0.001) + 0.01;
 
-    if (judgment === '是') {
-      // 清脆悠远的古银钟鸣 (两重泛音共鸣)
-      [587.33, 880, 1174.66].forEach((freq, idx) => {
+      if (judgment === '是') {
+        // 【真】空灵银铃和弦 (C6, E6, G6, C7 高频清澈回响)
+        const chord = [1046.50, 1318.51, 1567.98, 2093.00];
+        chord.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t);
+
+          gain.gain.setValueAtTime(0.8 / (idx + 1), t);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(t);
+          osc.stop(t + 1.45);
+        });
+      } else if (judgment === '否') {
+        // 【伪】庄园行刑木槌重击 (沉闷撞击 + 木质共鸣箱)
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, t);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.exponentialRampToValueAtTime(35, t + 0.28);
 
-        gain.gain.setValueAtTime(0.2 / (idx + 1), t);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+        gain.gain.setValueAtTime(1.1, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
 
         osc.connect(gain);
         gain.connect(this.ctx.destination);
 
         osc.start(t);
-        osc.stop(t + 1.2);
-      });
-    } else if (judgment === '否') {
-      // 沉闷的刑架木槌轰鸣 (低频下潜撞击)
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(110, t);
-      osc.frequency.exponentialRampToValueAtTime(45, t + 0.35);
+        osc.stop(t + 0.32);
 
-      gain.gain.setValueAtTime(0.45, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+        // 木槌脆响瞬态
+        const snap = this.ctx.createOscillator();
+        const snapGain = this.ctx.createGain();
+        snap.type = 'square';
+        snap.frequency.setValueAtTime(520, t);
+        snap.frequency.exponentialRampToValueAtTime(110, t + 0.04);
+        snapGain.gain.setValueAtTime(0.6, t);
+        snapGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        snap.connect(snapGain);
+        snapGain.connect(this.ctx.destination);
+        snap.start(t);
+        snap.stop(t + 0.05);
+      } else if (judgment === '是也不是') {
+        // 【亦真亦幻】诡谲双音泛音
+        [440, 466.16].forEach((freq) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.35, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.65);
+        });
+      } else {
+        // 【无涉】虚无干燥沙沙声
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(260, t);
+        osc.frequency.linearRampToValueAtTime(120, t + 0.15);
 
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
+        gain.gain.setValueAtTime(0.4, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
 
-      osc.start(t);
-      osc.stop(t + 0.4);
-    } else {
-      // 迷雾沙沙声 (虚无感)
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(260, t);
-      osc.frequency.linearRampToValueAtTime(180, t + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
 
-      gain.gain.setValueAtTime(0.12, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      osc.start(t);
-      osc.stop(t + 0.3);
+        osc.start(t);
+        osc.stop(t + 0.18);
+      }
+    } catch (e) {
+      console.warn('Verdict audio error:', e);
     }
   }
 
   /**
-   * 3. 破案爽点高潮：锁链崩断 + 两记胸腔重度心跳声 (Lub-Dub)
+   * 3. 撕裂迷雾/锁链断裂 + 沉重两记心跳声 (Lub-Dub)
    */
   playClueUnlock() {
     if (this.muted) return;
-    this.ensureContext();
+    this.unlock();
     if (!this.ctx) return;
 
-    const t = this.ctx.currentTime;
+    try {
+      const t = Math.max(this.ctx.currentTime || 0, 0.001) + 0.01;
 
-    // 锁链崩断金属高频刮擦
-    const metalOsc = this.ctx.createOscillator();
-    const metalGain = this.ctx.createGain();
-    metalOsc.type = 'sawtooth';
-    metalOsc.frequency.setValueAtTime(800, t);
-    metalOsc.frequency.exponentialRampToValueAtTime(220, t + 0.15);
+      // 锁链金属崩裂刮擦
+      const metal = this.ctx.createOscillator();
+      const metalGain = this.ctx.createGain();
+      metal.type = 'sawtooth';
+      metal.frequency.setValueAtTime(1200, t);
+      metal.frequency.exponentialRampToValueAtTime(140, t + 0.22);
 
-    metalGain.gain.setValueAtTime(0.3, t);
-    metalGain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      metalGain.gain.setValueAtTime(0.7, t);
+      metalGain.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
 
-    metalOsc.connect(metalGain);
-    metalGain.connect(this.ctx.destination);
-    metalOsc.start(t);
-    metalOsc.stop(t + 0.2);
+      metal.connect(metalGain);
+      metalGain.connect(this.ctx.destination);
+      metal.start(t);
+      metal.stop(t + 0.25);
 
-    // 第一声心跳 (Lub)
-    this._triggerHeartbeat(t + 0.08, 65, 0.55);
+      // 第一声重度心跳 (Lub)
+      this._thump(t + 0.08, 90, 1.1);
 
-    // 第二声心跳 (Dub)
-    this._triggerHeartbeat(t + 0.26, 52, 0.45);
+      // 第二声心跳 (Dub)
+      this._thump(t + 0.32, 75, 0.95);
+    } catch (e) {
+      console.warn('Clue unlock audio error:', e);
+    }
   }
 
-  _triggerHeartbeat(time, startFreq, volume) {
+  _thump(time, startFreq, volume) {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
     osc.type = 'sine';
     osc.frequency.setValueAtTime(startFreq, time);
-    osc.frequency.exponentialRampToValueAtTime(32, time + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(26, time + 0.2);
 
     gain.gain.setValueAtTime(volume, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
 
     osc.start(time);
-    osc.stop(time + 0.2);
+    osc.stop(time + 0.24);
   }
 
   /**
-   * 4. 终局大捷：庄园教堂古钟深沉长鸣 (Church Bell)
+   * 4. 庄园终局教堂晚钟 (深沉悠远)
    */
   playChurchBell() {
     if (this.muted) return;
-    this.ensureContext();
+    this.unlock();
     if (!this.ctx) return;
 
-    const t = this.ctx.currentTime;
-    // 经典的钟声音频物理谐波：主基频 + 多个非整数泛音
-    const bellHarmonics = [220, 442, 594, 885];
+    try {
+      const t = Math.max(this.ctx.currentTime || 0, 0.001) + 0.01;
+      const harmonics = [146.83, 220.00, 293.66, 370.00, 440.00];
 
-    bellHarmonics.forEach((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, t);
+      harmonics.forEach((freq, idx) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t);
 
-      gain.gain.setValueAtTime(0.35 / (idx * 0.8 + 1), t);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 3.0);
+        gain.gain.setValueAtTime(0.8 / (idx + 1), t);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 3.8);
 
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
 
-      osc.start(t);
-      osc.stop(t + 3.0);
-    });
+        osc.start(t);
+        osc.stop(t + 3.9);
+      });
+    } catch (e) {
+      console.warn('Church bell audio error:', e);
+    }
   }
 }
 

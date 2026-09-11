@@ -13,5 +13,11 @@ export default {
 </script>
 
 <style>
-/*每个页面公共css */
+/* 庄园全局暗黑底层样式 */
+page, body, html {
+  background-color: #060508;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
 </style>

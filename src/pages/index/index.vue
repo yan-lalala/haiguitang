@@ -386,8 +386,38 @@
           </view>
         </view>
         <view class="verdict-buttons">
+          <button class="generate-poster-btn" @tap="openPosterModal">
+            <text class="btn-icon">📜</text>
+            <text class="btn-text">生成绝密结案战报海报 (小红书/朋友圈)</text>
+          </button>
           <button class="next-manor-btn" @tap="nextCase">开启下一桩卷宗 ➔</button>
           <button class="reread-log-btn" @tap="showCaseSolvedModal = false">回顾审讯笔录</button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 模态框 6：绝密档案海报预览与保存 -->
+    <view class="gothic-modal-mask" v-if="showPosterModal" @tap="showPosterModal = false">
+      <view class="poster-preview-box" @tap.stop>
+        <view class="modal-gothic-header">
+          <text class="modal-gothic-title">📜 庄园结案封缄档案</text>
+          <text class="modal-dismiss" @tap="showPosterModal = false">✕</text>
+        </view>
+
+        <!-- 海报 Canvas 渲染展示区 -->
+        <view class="canvas-wrapper">
+          <canvas
+            canvas-id="posterCanvas"
+            id="posterCanvas"
+            class="poster-canvas-el"
+          ></canvas>
+        </view>
+
+        <!-- 保存按钮 -->
+        <view class="poster-actions">
+          <button class="save-poster-btn" @tap="savePoster">
+            📥 保存海报至相册
+          </button>
         </view>
       </view>
     </view>
@@ -399,6 +429,7 @@ import { SOUPS } from '../../data/soups.js';
 import { judgeQuestion, evaluateTruthAttempt } from '../../utils/judge.js';
 import { manorSocket } from '../../utils/socket.js';
 import { manorAudio } from '../../utils/audio.js';
+import { renderPosterToCanvas } from '../../utils/poster.js';
 
 export default {
   data() {
@@ -420,6 +451,7 @@ export default {
       showSettings: false,
       showSolveModal: false,
       showCaseSolvedModal: false,
+      showPosterModal: false,
       finalScore: 0,
 
       // 联机状态数据
@@ -805,6 +837,64 @@ export default {
       setTimeout(() => {
         this.scrollTop = this.scrollTop + 1000;
       }, 100);
+    },
+    openPosterModal() {
+      this.showPosterModal = true;
+      setTimeout(() => {
+        const ctx = uni.createCanvasContext('posterCanvas', this);
+        renderPosterToCanvas({
+          ctx,
+          soup: this.currentSoup,
+          score: this.finalScore || 90,
+          historyCount: this.history.length,
+          sanValue: this.sanValue,
+          playerName: this.myPlayerName
+        });
+      }, 250);
+    },
+    savePoster() {
+      uni.showLoading({ title: '正在封缄印鉴...' });
+      uni.canvasToTempFilePath({
+        canvasId: 'posterCanvas',
+        destWidth: 1280,
+        destHeight: 2040,
+        success: (res) => {
+          uni.hideLoading();
+          // #ifdef MP-WEIXIN
+          uni.saveImageToPhotosAlbum({
+            filePath: res.tempFilePath,
+            success: () => {
+              uni.showToast({
+                title: '已保存至手机相册！快去小红书/朋友圈打卡吧',
+                icon: 'none',
+                duration: 3000
+              });
+            },
+            fail: () => {
+              uni.showModal({
+                title: '授权提示',
+                content: '需要您的相册权限才能将战报海报保存至相册',
+                success: (m) => {
+                  if (m.confirm) uni.openSetting();
+                }
+              });
+            }
+          });
+          // #endif
+
+          // #ifdef H5
+          const a = document.createElement('a');
+          a.href = res.tempFilePath;
+          a.download = `欧律狄刻庄园结案战报_${this.currentSoup.title}.png`;
+          a.click();
+          uni.showToast({ title: '已触发海报下载！', icon: 'success' });
+          // #endif
+        },
+        fail: () => {
+          uni.hideLoading();
+          uni.showToast({ title: '导出海报失败，请稍后重试', icon: 'none' });
+        }
+      }, this);
     }
   }
 };
@@ -2141,9 +2231,83 @@ export default {
   border: 1px solid #22c55e;
 }
 
+.generate-poster-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  background: linear-gradient(135deg, #b45309, #78350f);
+  color: #fef08a;
+  border: 2rpx solid #f59e0b;
+  font-size: 26rpx;
+  font-weight: 900;
+  border-radius: 8rpx;
+  padding: 12rpx 0;
+  box-shadow: 0 4rpx 14rpx rgba(245, 158, 11, 0.35);
+  animation: breathe-gold 2s infinite alternate;
+}
+
+@keyframes breathe-gold {
+  0% { box-shadow: 0 0 10rpx rgba(245, 158, 11, 0.2); }
+  100% { box-shadow: 0 0 20rpx rgba(245, 158, 11, 0.6); }
+}
+
+.generate-poster-btn .btn-icon {
+  font-size: 32rpx;
+}
+
+.generate-poster-btn .btn-text {
+  letter-spacing: 1rpx;
+}
+
 .reread-log-btn {
   background: transparent;
   color: #927e65;
   font-size: 24rpx;
+}
+
+/* ---------------- 绝密档案海报模态框 ---------------- */
+.poster-preview-box {
+  width: 100%;
+  max-width: 640rpx;
+  background: #19140e;
+  background-image: linear-gradient(to bottom, #201912, #14100b);
+  border: 3rpx solid #73593b;
+  border-radius: 16rpx;
+  padding: 28rpx;
+  box-shadow: 0 24rpx 60rpx rgba(0,0,0,0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.canvas-wrapper {
+  width: 560rpx;
+  height: 890rpx;
+  border-radius: 10rpx;
+  overflow: hidden;
+  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.8);
+  border: 2rpx solid #4a3825;
+  margin-bottom: 24rpx;
+}
+
+.poster-canvas-el {
+  width: 560rpx;
+  height: 890rpx;
+}
+
+.poster-actions {
+  width: 100%;
+}
+
+.save-poster-btn {
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  border: 2rpx solid #f87171;
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 900;
+  letter-spacing: 2rpx;
+  border-radius: 10rpx;
+  box-shadow: 0 6rpx 20rpx rgba(220, 38, 38, 0.5);
 }
 </style>

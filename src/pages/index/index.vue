@@ -178,12 +178,19 @@
       </view>
     </scroll-view>
 
-    <!-- 快捷调查手签（灵感候选） -->
-    <view class="manor-hints" v-if="suggestedQuestions.length > 0">
+    <!-- 快捷调查手签（刑侦通用破局思路 + 3阶灵感手记） -->
+    <view class="manor-hints">
       <scroll-view scroll-x class="hints-rail">
         <view class="hints-track">
+          <!-- 💡 三阶迷雾灵感手记入口胶囊 -->
+          <view class="hint-book-pill" @tap="showHintsModal = true">
+            <text class="hint-book-icon">💡</text>
+            <text class="hint-book-txt">灵感手记 ({{ currentUnlockedHintLevel }}/{{ currentCaseHints.length }})</text>
+          </view>
+
+          <!-- 通用刑侦探究手签 (绝无剧透) -->
           <view
-            v-for="(q, i) in suggestedQuestions"
+            v-for="(q, i) in generalQuestions"
             :key="i"
             class="clue-tag-btn"
             @tap="useQuickHint(q)"
@@ -569,6 +576,65 @@
         </view>
       </view>
     </view>
+
+    <!-- 模态框 7：三阶迷雾灵感手记 (防剧透阶梯启发) -->
+    <view class="gothic-modal-mask" v-if="showHintsModal" @tap="showHintsModal = false">
+      <view class="parchment-modal-box hints-modal-box" @tap.stop>
+        <view class="modal-gothic-header">
+          <text class="modal-gothic-title">💡 庄园灵感手记 · 阶梯密笺</text>
+          <text class="modal-dismiss" @tap="showHintsModal = false">✕</text>
+        </view>
+
+        <view class="hints-modal-sub">
+          <text class="hints-lore-desc">
+            每揭开一层封印需耗费 10 点 SAN（理智值）。层层递进，绝不提前暴露核心真相。
+          </text>
+        </view>
+
+        <view class="hint-tiers-list">
+          <view
+            v-for="(hint, idx) in currentCaseHints"
+            :key="idx"
+            class="hint-tier-card"
+            :class="{ 'tier-unlocked': idx < currentUnlockedHintLevel, 'tier-locked': idx >= currentUnlockedHintLevel }"
+          >
+            <view class="tier-header">
+              <view class="tier-badge">
+                <text class="tier-level-num">第 {{ hint.level || (idx + 1) }} 阶</text>
+                <text class="tier-title">{{ hint.title }}</text>
+              </view>
+              <text class="tier-status-tag">
+                {{ idx < currentUnlockedHintLevel ? '🔓 已拆封' : '🔒 密漆封存' }}
+              </text>
+            </view>
+
+            <view class="tier-body">
+              <text v-if="idx < currentUnlockedHintLevel" class="tier-unlocked-text">
+                {{ hint.text }}
+              </text>
+              <view v-else class="tier-locked-placeholder">
+                <text class="tier-blur-lock">🕯️ 此密笺已被庄园红蜡封缄，推演受阻时方可破译</text>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="hints-modal-footer">
+          <button
+            v-if="currentUnlockedHintLevel < currentCaseHints.length"
+            class="unlock-hint-btn"
+            :disabled="sanValue < 10"
+            @tap="unlockNextHint"
+          >
+            <text class="unlock-btn-icon">🪡</text>
+            <text class="unlock-btn-text">撕开第 {{ currentUnlockedHintLevel + 1 }} 阶封条 (消耗 10 SAN)</text>
+          </button>
+          <view v-else class="all-hints-unlocked-tip">
+            <text>⚜️ 本卷宗的所有灵感密笺已全部解封 ⚜️</text>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -600,6 +666,8 @@ export default {
       showSolveModal: false,
       showCaseSolvedModal: false,
       showPosterModal: false,
+      showHintsModal: false,
+      unlockedHintLevels: {},
       finalScore: 0,
 
       // AI 卷宗生成状态
@@ -634,11 +702,34 @@ export default {
       if (this.sanValue > 30) return 'san-warning';
       return 'san-danger';
     },
+    currentCaseHints() {
+      if (this.currentSoup.hints && Array.isArray(this.currentSoup.hints) && this.currentSoup.hints.length > 0) {
+        return this.currentSoup.hints;
+      }
+      return [
+        { level: 1, title: '反常动机', text: '当事人展现出的反常行为并非偶然，是否存在某种不可抗拒的外力或深层诱因？' },
+        { level: 2, title: '环境与感官', text: '死者当时所感知的环境，与其物理现实是否存在致命的认知偏差？' },
+        { level: 3, title: '隐蔽的第三者', text: '现场除了表面上的人物，是否还有一个未被直接提及但决定了命运走向的存在？' }
+      ];
+    },
+    currentUnlockedHintLevel() {
+      return (this.unlockedHintLevels && this.unlockedHintLevels[this.currentSoup.id]) || 0;
+    },
+    generalQuestions() {
+      return [
+        '现场是否存在第二个人？',
+        '死者（主角）的行为是自愿的吗？',
+        '死因是否与异常的感官错觉有关？',
+        '事件发生在一个封闭且与世隔绝的密闭空间吗？',
+        '主角生前的特殊身份或职业是破局关键吗？',
+        '故事中隐藏着某种极端的欺骗或残酷契约吗？'
+      ];
+    },
     suggestedQuestions() {
       if (this.currentSoup.suggestedQuestions && this.currentSoup.suggestedQuestions.length > 0) {
         return this.currentSoup.suggestedQuestions;
       }
-      return ['死因与超自然力量有关吗？', '现场是否有其他人存在？', '关键在于主角的真实身份？', '这是一起谋杀案吗？'];
+      return this.generalQuestions;
     }
   },
   onLoad() {
@@ -859,6 +950,30 @@ export default {
     useQuickHint(hint) {
       this.inputQuestion = hint;
       this.sendQuestion();
+    },
+    unlockNextHint() {
+      if (this.currentUnlockedHintLevel >= this.currentCaseHints.length) return;
+      if (this.sanValue < 10) {
+        uni.showToast({ title: '理智值不足 (需 10 SAN)，请谨慎发问恢复！', icon: 'none' });
+        return;
+      }
+      uni.showModal({
+        title: '拆阅灵感封条？',
+        content: `即将破译第 ${this.currentUnlockedHintLevel + 1} 阶密笺，需消耗 10 点理智值（当前理智: ${this.sanValue}）。`,
+        confirmText: '破译密笺',
+        cancelText: '暂自推演',
+        confirmColor: '#c59b27',
+        success: (res) => {
+          if (res.confirm) {
+            this.sanValue = Math.max(0, this.sanValue - 10);
+            const nextLvl = this.currentUnlockedHintLevel + 1;
+            this.$set(this.unlockedHintLevels, this.currentSoup.id, nextLvl);
+            manorAudio.playClueUnlock();
+            try { uni.vibrateShort(); } catch (e) {}
+            uni.showToast({ title: `第 ${nextLvl} 阶封条已撕开！`, icon: 'success' });
+          }
+        }
+      });
     },
     async sendQuestion() {
       const q = this.inputQuestion.trim();
@@ -2041,6 +2156,32 @@ export default {
   padding: 0 24rpx;
 }
 
+/* 灵感手记胶囊按钮 (常驻左侧突出) */
+.hint-book-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  background: linear-gradient(135deg, #382811, #221808);
+  border: 1px solid #d97706;
+  padding: 8rpx 22rpx;
+  border-radius: 24rpx;
+  box-shadow: 0 0 14rpx rgba(217, 119, 6, 0.35);
+  cursor: pointer;
+}
+
+.hint-book-icon {
+  font-size: 24rpx;
+  filter: drop-shadow(0 0 6rpx #f59e0b);
+}
+
+.hint-book-txt {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 1rpx;
+  white-space: nowrap;
+}
+
 .clue-tag-btn {
   display: inline-flex;
   align-items: center;
@@ -3155,5 +3296,162 @@ export default {
   border-radius: 10rpx;
   padding: 10rpx 0;
   box-shadow: 0 6rpx 20rpx rgba(220, 38, 38, 0.5);
+}
+
+/* ---------------- 模态框 7：三阶迷雾灵感手记 ---------------- */
+.hints-modal-box {
+  width: 90%;
+  max-width: 650rpx;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.hints-modal-sub {
+  padding: 10rpx 0 16rpx 0;
+  border-bottom: 1px dashed rgba(200, 160, 100, 0.25);
+  margin-bottom: 20rpx;
+}
+
+.hints-lore-desc {
+  font-size: 22rpx;
+  color: #a8947b;
+  line-height: 1.5;
+  display: block;
+}
+
+.hint-tiers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  overflow-y: auto;
+  max-height: 52vh;
+  padding-right: 6rpx;
+}
+
+.hint-tier-card {
+  border-radius: 12rpx;
+  padding: 20rpx 22rpx;
+  transition: all 0.3s ease;
+}
+
+.hint-tier-card.tier-unlocked {
+  background: rgba(38, 28, 16, 0.85);
+  border: 1px solid #c59b27;
+  box-shadow: 0 6rpx 20rpx rgba(0, 0, 0, 0.4), inset 0 0 16rpx rgba(217, 119, 6, 0.15);
+}
+
+.hint-tier-card.tier-locked {
+  background: rgba(18, 15, 20, 0.7);
+  border: 1px dashed #4a3e31;
+  opacity: 0.78;
+}
+
+.tier-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.tier-badge {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.tier-level-num {
+  font-size: 20rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 6rpx;
+  background: #3b2a1a;
+  color: #f59e0b;
+  font-weight: 800;
+  border: 1px solid #785223;
+}
+
+.tier-title {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #eed9b3;
+  letter-spacing: 1rpx;
+}
+
+.tier-status-tag {
+  font-size: 20rpx;
+  color: #8c7760;
+}
+
+.tier-unlocked .tier-status-tag {
+  color: #34d399;
+}
+
+.tier-body {
+  margin-top: 6rpx;
+}
+
+.tier-unlocked-text {
+  font-size: 25rpx;
+  color: #e4d8c5;
+  line-height: 1.6;
+  text-align: justify;
+}
+
+.tier-locked-placeholder {
+  padding: 14rpx 10rpx;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8rpx;
+  text-align: center;
+}
+
+.tier-blur-lock {
+  font-size: 22rpx;
+  color: #736453;
+  font-style: italic;
+}
+
+.hints-modal-footer {
+  margin-top: 24rpx;
+  padding-top: 16rpx;
+  border-top: 1px solid rgba(180, 140, 80, 0.2);
+}
+
+.unlock-hint-btn {
+  background: linear-gradient(135deg, #9a3412, #7c2d12);
+  border: 2rpx solid #ea580c;
+  color: #ffedd5;
+  font-size: 26rpx;
+  font-weight: bold;
+  border-radius: 12rpx;
+  padding: 12rpx 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  box-shadow: 0 4rpx 16rpx rgba(154, 52, 18, 0.4);
+}
+
+.unlock-hint-btn[disabled] {
+  background: #2a201c !important;
+  border-color: #4b392e !important;
+  color: #6d5b4f !important;
+  box-shadow: none !important;
+  opacity: 0.6;
+}
+
+.unlock-btn-icon {
+  font-size: 28rpx;
+}
+
+.unlock-btn-text {
+  letter-spacing: 1rpx;
+}
+
+.all-hints-unlocked-tip {
+  text-align: center;
+  font-size: 24rpx;
+  color: #c59b27;
+  padding: 10rpx 0;
+  letter-spacing: 2rpx;
 }
 </style>

@@ -253,7 +253,10 @@ async function callLLMCaseGenerator({ theme, category, apiConfig }) {
 2. 谜面（汤面）：2-3句话，简短、离奇、充满悬念与反常行为，让人百思不得其解。
 3. 真实真相（汤底）：因果逻辑严密、合乎情理但意料之外的完整故事（80-160字）。绝不能有超自然鬼怪，必须符合现实物理/心理逻辑。
 4. 拆解4块关键疑团线索（clues，每个带有3-6个用于语义匹配的关键词matchKeywords）。
-5. 提供4个启发性的调查员发问灵感（suggestedQuestions）。
+5. 提供3阶层层递进的思维灵感手记（hints），要求：
+   - Level 1 (初级方向): 仅指出主角的社会身份、物理空间或动机视角，严禁任何直接剧透；
+   - Level 2 (深度矛盾): 指出反常行为背后的逻辑矛盾与信息差；
+   - Level 3 (破局发问): 提供一个建设性的发问切入方向。
 6. 一句充满文学宿命感/讽刺感的结案哲学金句（quote）。
 
 必须严格只输出合法的 JSON 对象，不要包含 markdown 标记代码块，格式如下：
@@ -266,7 +269,11 @@ async function callLLMCaseGenerator({ theme, category, apiConfig }) {
   "quote": "文学金句",
   "question": "汤面谜面",
   "truth": "完整故事真相",
-  "suggestedQuestions": ["问题1", "问题2", "问题3", "问题4"],
+  "hints": [
+    { "level": 1, "title": "初级方向", "text": "隐喻思维方向" },
+    { "level": 2, "title": "深度矛盾", "text": "逻辑矛盾核心" },
+    { "level": 3, "title": "破局发问", "text": "启发性发问切入点" }
+  ],
   "clues": [
     { "id": 1, "title": "线索1名称", "desc": "线索说明", "matchKeywords": ["关键词1", "关键词2"] },
     { "id": 2, "title": "线索2名称", "desc": "线索说明", "matchKeywords": ["关键词1", "关键词2"] },

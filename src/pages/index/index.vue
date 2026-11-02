@@ -379,7 +379,12 @@
           <view class="room-cipher-banner">
             <text class="cipher-lbl">当前庄园暗号</text>
             <text class="cipher-val">{{ currentRoomId }}</text>
-            <text class="cipher-copy-tip" @tap="copyRoomCipher">📋 点击复制暗号</text>
+            <view class="cipher-actions-row">
+              <button class="cipher-invite-btn" @tap="copyRoomInvite">
+                📨 复制专属邀请密函 (含直达链接)
+              </button>
+              <text class="cipher-copy-tip" @tap="copyRoomCipher">📋 仅复制4位数字暗号</text>
+            </view>
           </view>
           <view class="room-fellows">
             <text class="fellows-title">已落座的同伴 ({{ roomPlayers.length }}/2)：</text>
@@ -779,7 +784,48 @@ export default {
 
     // 绑定 WebSocket 协同事件
     this.setupSocketListeners();
+
+    // 检查是否有通过专属邀请链接或小程序卡片带入的房间暗号
+    let targetRoom = (options && options.room) || '';
+    if (!targetRoom && typeof window !== 'undefined' && window.location && window.location.search) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        targetRoom = params.get('room') || '';
+      } catch (e) {}
+    }
+
+    if (targetRoom) {
+      this.inputJoinRoomId = targetRoom;
+      setTimeout(() => {
+        uni.showModal({
+          title: '🕯️ 收到庄园密约！',
+          content: `检测到同伴发来的探案邀请，房间暗号：【${targetRoom}】。\n是否立即踏入案室开启双人组队推演？`,
+          confirmText: '踏入案室',
+          cancelText: '暂自推演',
+          confirmColor: '#c59b27',
+          success: (res) => {
+            if (res.confirm) {
+              this.joinRoom();
+            }
+          }
+        });
+      }, 700);
+    }
   },
+  // #ifdef MP-WEIXIN
+  onShareAppMessage() {
+    return {
+      title: `🕯️【庄园探案】快来！我正在破译《${this.currentSoup.title}》，暗号: ${this.currentRoomId || '海龟汤'}`,
+      path: `/pages/index/index?room=${this.currentRoomId || ''}`
+    };
+  },
+  onShareTimeline() {
+    return {
+      title: `🕯️【庄园探案】绝密海龟汤案卷《${this.currentSoup.title}》，来试试你的理智值！`,
+      query: `room=${this.currentRoomId || ''}`
+    };
+  },
+  // #endif
   mounted() {
     // #ifdef H5
     if (typeof window !== 'undefined') {
@@ -935,6 +981,25 @@ export default {
         uni.setClipboardData({
           data: this.currentRoomId,
           success: () => uni.showToast({ title: '暗号已复制！快发给朋友', icon: 'none' })
+        });
+      } catch (e) {}
+    },
+    copyRoomInvite() {
+      let shareUrl = '';
+      if (typeof window !== 'undefined' && window.location) {
+        const origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+        const pathname = window.location.pathname || '/';
+        shareUrl = `${origin}${pathname}?room=${this.currentRoomId}`;
+      }
+
+      const inviteText = `【🕯️ 庄园密约 · 双人探案邀请】\n调查员【${this.myPlayerName}】正在破译《${this.currentSoup.title}》！\n暗号：【${this.currentRoomId}】\n${shareUrl ? `点击直达案室：${shareUrl}` : '进入游戏输入暗号即可加入！'}`;
+
+      try {
+        uni.setClipboardData({
+          data: inviteText,
+          success: () => {
+            uni.showToast({ title: '邀请密函已复制！直接粘贴发给朋友', icon: 'none', duration: 2500 });
+          }
         });
       } catch (e) {}
     },
@@ -2736,9 +2801,28 @@ export default {
   text-shadow: 0 0 16rpx rgba(254, 240, 138, 0.4);
 }
 
+.cipher-actions-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.cipher-invite-btn {
+  background: linear-gradient(135deg, #b91c1c, #7f1d1d);
+  border: 1px solid #ef4444;
+  color: #fff1f2;
+  font-size: 24rpx;
+  font-weight: 800;
+  border-radius: 24rpx;
+  padding: 8rpx 28rpx;
+  box-shadow: 0 4rpx 14rpx rgba(185, 28, 28, 0.4);
+}
+
 .cipher-copy-tip {
-  font-size: 22rpx;
-  color: #93c5fd;
+  font-size: 20rpx;
+  color: #94a3b8;
   text-decoration: underline;
   display: inline-block;
   cursor: pointer;

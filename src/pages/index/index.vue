@@ -227,27 +227,78 @@
 
     <!-- 模态框 1：绝密庄园档案库 -->
     <view class="gothic-modal-mask" v-if="showCaseSelector" @tap="showCaseSelector = false">
-      <view class="parchment-modal-box" @tap.stop>
+      <view class="parchment-modal-box case-selector-box" @tap.stop>
         <view class="modal-gothic-header">
-          <text class="modal-gothic-title">🗝️ 庄园尘封卷宗</text>
+          <text class="modal-gothic-title">🗝️ 庄园尘封卷宗 ({{ allSoups.length }}卷)</text>
           <text class="modal-dismiss" @tap="showCaseSelector = false">✕</text>
         </view>
-        <view class="manor-file-list">
-          <view
-            v-for="soup in allSoups"
-            :key="soup.id"
-            class="manor-file-item"
-            :class="{ current: soup.id === currentSoup.id }"
-            @tap="switchCase(soup)"
-          >
-            <view class="file-stitch"></view>
-            <view class="file-text-meta">
-              <text class="file-item-title">{{ soup.title }}</text>
-              <text class="file-item-sub">{{ soup.category }} · {{ soup.difficulty }}</text>
+
+        <!-- 召唤大模型现场编织新卷宗入口 -->
+        <view class="ai-create-banner" @tap="showCaseCreator = !showCaseCreator">
+          <view class="ai-banner-left">
+            <text class="ai-banner-icon">✨</text>
+            <view class="ai-banner-text">
+              <text class="ai-banner-title">召唤虚空：大模型现场编织全新卷宗</text>
+              <text class="ai-banner-sub">{{ (apiConfig.enabled && apiConfig.apiKey) ? `由【${apiConfig.model || '大模型'}】现场推演未世之谜` : '未连接大模型时采用离线神秘宝库' }}</text>
             </view>
-            <text class="file-investigating" v-if="soup.id === currentSoup.id">🕯️ 翻阅中</text>
           </view>
+          <text class="ai-banner-toggle">{{ showCaseCreator ? '▲ 收起' : '▼ 展开' }}</text>
         </view>
+
+        <!-- 展开的 AI 织造面板 -->
+        <view v-if="showCaseCreator" class="ai-creator-panel">
+          <view class="creator-category-row">
+            <text class="creator-lbl">风格类别：</text>
+            <view class="cat-chips">
+              <text
+                v-for="cat in ['细思极恐', '经典硬核', '荒诞哥特', '温情反转']"
+                :key="cat"
+                class="cat-chip"
+                :class="{ active: aiGenerateCategory === cat }"
+                @tap="aiGenerateCategory = cat"
+              >{{ cat }}</text>
+            </view>
+          </view>
+
+          <view class="creator-input-row">
+            <input
+              class="creator-theme-input"
+              v-model="aiGenerateTheme"
+              placeholder="自定义主题关键词 (如: 提线木偶、暴风雪山庄、午夜电梯，留空则随机)"
+              maxlength="30"
+            />
+          </view>
+
+          <button class="ai-summon-btn" :disabled="isGeneratingCase" @tap="createAICase">
+            {{ isGeneratingCase ? '⏳ 大模型正在虚空推演谜底...' : '🔮 立即编织全新绝密案件！' }}
+          </button>
+        </view>
+
+        <!-- 案卷列表 (支持平滑滚动) -->
+        <scroll-view scroll-y class="manor-file-scroll">
+          <view class="manor-file-list">
+            <view
+              v-for="soup in allSoups"
+              :key="soup.id"
+              class="manor-file-item"
+              :class="{ current: soup.id === currentSoup.id, 'is-ai': soup.isAICreated }"
+              @tap="switchCase(soup)"
+            >
+              <view class="file-stitch"></view>
+              <view class="file-text-meta">
+                <view class="file-title-line">
+                  <text class="file-item-title">{{ soup.title }}</text>
+                  <text v-if="soup.isAICreated" class="ai-tag">✨ AI自创</text>
+                </view>
+                <text class="file-item-sub">{{ soup.category }} · {{ soup.difficulty }}</text>
+              </view>
+              <view class="file-item-actions">
+                <text class="file-investigating" v-if="soup.id === currentSoup.id">🕯️ 翻阅中</text>
+                <text v-if="soup.isAICreated" class="file-del-btn" @tap.stop="deleteAICase(soup, $event)" title="销毁此卷宗">🗑️</text>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
       </view>
     </view>
 
@@ -523,7 +574,7 @@
 
 <script>
 import { SOUPS } from '../../data/soups.js';
-import { judgeQuestion, evaluateTruthAttempt } from '../../utils/judge.js';
+import { judgeQuestion, evaluateTruthAttempt, generateAICase } from '../../utils/judge.js';
 import { manorSocket } from '../../utils/socket.js';
 import { manorAudio } from '../../utils/audio.js';
 import { renderPosterToCanvas } from '../../utils/poster.js';
@@ -550,6 +601,12 @@ export default {
       showCaseSolvedModal: false,
       showPosterModal: false,
       finalScore: 0,
+
+      // AI 卷宗生成状态
+      showCaseCreator: false,
+      aiGenerateTheme: '',
+      aiGenerateCategory: '细思极恐',
+      isGeneratingCase: false,
 
       // 联机状态数据
       showCoopModal: false,
@@ -578,13 +635,10 @@ export default {
       return 'san-danger';
     },
     suggestedQuestions() {
-      if (this.currentSoup.id === 'case_001') {
-        return ['死因是自杀吗？', '和小明的职业密切相关吗？', '天气预报播报了重大事故？', '他的失职导致了别人丧命？'];
-      } else if (this.currentSoup.id === 'case_002') {
-        return ['他是从极高的高空坠落的？', '火柴是残酷抽签的祭品？', '一丝不挂是为了舍弃重量？', '现场曾有活着的同伴？'];
-      } else {
-        return ['小黑并不是人类，而是动物？', '它的主人是一名失明者？', '当时发生了一场致命车祸？', '小黑是为救主人而献出生命？'];
+      if (this.currentSoup.suggestedQuestions && this.currentSoup.suggestedQuestions.length > 0) {
+        return this.currentSoup.suggestedQuestions;
       }
+      return ['死因与超自然力量有关吗？', '现场是否有其他人存在？', '关键在于主角的真实身份？', '这是一起谋杀案吗？'];
     }
   },
   onLoad() {
@@ -592,6 +646,17 @@ export default {
       const savedConfig = uni.getStorageSync('turtle_soup_api_config');
       if (savedConfig) {
         this.apiConfig = Object.assign(this.apiConfig, JSON.parse(savedConfig));
+      }
+    } catch (e) {}
+
+    // 读取本地保存的 AI 自创卷宗
+    try {
+      const savedAICases = uni.getStorageSync('manor_custom_ai_cases');
+      if (savedAICases) {
+        const customCases = JSON.parse(savedAICases);
+        if (Array.isArray(customCases) && customCases.length > 0) {
+          this.allSoups = [...SOUPS, ...customCases];
+        }
       }
     } catch (e) {}
 
@@ -952,6 +1017,69 @@ export default {
       this.showCaseSolvedModal = false;
       const nextIdx = (this.currentSoupIndex + 1) % this.allSoups.length;
       this.switchCase(this.allSoups[nextIdx]);
+    },
+    async createAICase() {
+      if (this.isGeneratingCase) return;
+      this.isGeneratingCase = true;
+      uni.showLoading({ title: '大模型正在虚空织造案卷...' });
+      try {
+        const newCase = await generateAICase({
+          theme: this.aiGenerateTheme.trim() || '随机未知',
+          category: this.aiGenerateCategory,
+          apiConfig: this.apiConfig
+        });
+        uni.hideLoading();
+
+        // 存入列表
+        this.allSoups.push(newCase);
+
+        // 存入本地存储以持久化
+        try {
+          const customAiCases = this.allSoups.filter(s => s.isAICreated);
+          uni.setStorageSync('manor_custom_ai_cases', JSON.stringify(customAiCases));
+        } catch (e) {}
+
+        // 立即切换到这桩新案卷
+        this.switchCase(newCase);
+        this.showCaseCreator = false;
+        this.showCaseSelector = false;
+        this.aiGenerateTheme = '';
+
+        uni.showModal({
+          title: '✨ 绝密案卷降临！',
+          content: `《${newCase.title}》已织造完成！\n【风格】：${newCase.category} · ${newCase.difficulty}\n大模型已作为第一主理人就绪，请开始向它发问！`,
+          showCancel: false,
+          confirmText: '踏入迷雾'
+        });
+      } catch (err) {
+        uni.hideLoading();
+        uni.showToast({ title: '织造案卷失败，请重试', icon: 'none' });
+      } finally {
+        this.isGeneratingCase = false;
+      }
+    },
+    deleteAICase(soup, event) {
+      if (event && event.stopPropagation) event.stopPropagation();
+      uni.showModal({
+        title: '销毁卷宗',
+        content: `确定要封存销毁 AI 卷宗《${soup.title}》吗？`,
+        success: (res) => {
+          if (res.confirm) {
+            const idx = this.allSoups.findIndex(s => s.id === soup.id);
+            if (idx !== -1) {
+              this.allSoups.splice(idx, 1);
+              try {
+                const customAiCases = this.allSoups.filter(s => s.isAICreated);
+                uni.setStorageSync('manor_custom_ai_cases', JSON.stringify(customAiCases));
+              } catch (e) {}
+              if (this.currentSoup.id === soup.id) {
+                this.switchCase(this.allSoups[0]);
+              }
+              uni.showToast({ title: '已销毁卷宗', icon: 'none' });
+            }
+          }
+        }
+      });
     },
     applyPreset(type) {
       if (type === 'deepseek') {
@@ -2062,6 +2190,140 @@ export default {
   padding: 8rpx;
 }
 
+/* 案卷弹窗专有布局 */
+.case-selector-box {
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* AI 召唤横幅 */
+.ai-create-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #2b1d12, #1b120c);
+  border: 2rpx dashed #d97706;
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 20rpx;
+  cursor: pointer;
+  box-shadow: 0 4rpx 12rpx rgba(217, 119, 6, 0.15);
+}
+
+.ai-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.ai-banner-icon {
+  font-size: 32rpx;
+  animation: pulse-ring 2s infinite ease-in-out;
+}
+
+.ai-banner-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-banner-title {
+  font-size: 24rpx;
+  font-weight: 900;
+  color: #fef08a;
+  letter-spacing: 1rpx;
+}
+
+.ai-banner-sub {
+  font-size: 18rpx;
+  color: #9c8971;
+  margin-top: 2rpx;
+}
+
+.ai-banner-toggle {
+  font-size: 20rpx;
+  color: #d97706;
+  font-weight: bold;
+}
+
+/* AI 织造展开面板 */
+.ai-creator-panel {
+  background: #120e0a;
+  border: 1px solid #4a3824;
+  border-radius: 8rpx;
+  padding: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.creator-category-row {
+  margin-bottom: 14rpx;
+}
+
+.creator-lbl {
+  font-size: 20rpx;
+  color: #bfae98;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.cat-chips {
+  display: flex;
+  gap: 10rpx;
+}
+
+.cat-chip {
+  background: #1c1611;
+  border: 1px solid #4a3a27;
+  color: #a8967f;
+  font-size: 20rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 20rpx;
+  cursor: pointer;
+}
+
+.cat-chip.active {
+  background: #991b1b;
+  border-color: #ef4444;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.creator-input-row {
+  margin-bottom: 14rpx;
+}
+
+.creator-theme-input {
+  background: #09080c;
+  border: 1px solid #544432;
+  color: #eed9b3;
+  padding: 10rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  height: 52rpx;
+}
+
+.ai-summon-btn {
+  background: linear-gradient(135deg, #b45309, #78350f);
+  border: 1px solid #f59e0b;
+  color: #fef08a;
+  font-size: 24rpx;
+  font-weight: 900;
+  border-radius: 8rpx;
+  padding: 6rpx 0;
+  box-shadow: 0 4rpx 12rpx rgba(245, 158, 11, 0.3);
+}
+
+.ai-summon-btn[disabled] {
+  opacity: 0.6;
+}
+
+/* 案卷平滑滚动区 */
+.manor-file-scroll {
+  flex: 1;
+  max-height: 48vh;
+  overflow-y: auto;
+}
+
 /* 案卷列表项 */
 .manor-file-list {
   display: flex;
@@ -2086,11 +2348,31 @@ export default {
   box-shadow: 0 0 16rpx rgba(217, 119, 6, 0.2);
 }
 
+.manor-file-item.is-ai {
+  border-left: 6rpx solid #ec4899;
+}
+
+.file-title-line {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
 .file-item-title {
   font-size: 28rpx;
   font-weight: 800;
   color: #edd9ba;
-  display: block;
+  display: inline-block;
+}
+
+.ai-tag {
+  font-size: 18rpx;
+  background: rgba(236, 72, 153, 0.2);
+  border: 1px solid #ec4899;
+  color: #f472b6;
+  padding: 0 8rpx;
+  border-radius: 4rpx;
+  font-weight: bold;
 }
 
 .file-item-sub {
@@ -2100,10 +2382,27 @@ export default {
   display: block;
 }
 
+.file-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
 .file-investigating {
   font-size: 22rpx;
   color: #f59e0b;
   font-weight: bold;
+}
+
+.file-del-btn {
+  font-size: 26rpx;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.file-del-btn:hover {
+  opacity: 1;
 }
 
 /* ---------------- 双人组队弹窗专有样式 ---------------- */

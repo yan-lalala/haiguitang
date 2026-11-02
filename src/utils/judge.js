@@ -226,3 +226,131 @@ async function callLLMTruthEvaluation({ soup, attemptText, apiConfig }) {
   const rawText = data.choices[0].message.content.trim().replace(/```json/g, '').replace(/```/g, '').trim();
   return JSON.parse(rawText);
 }
+
+/**
+ * 大模型现场编织全新海龟汤卷宗 (无限海龟汤生成器)
+ */
+export async function generateAICase({ theme = '随机未知', category = '细思极恐', apiConfig }) {
+  if (apiConfig && apiConfig.enabled && apiConfig.apiKey) {
+    try {
+      return await callLLMCaseGenerator({ theme, category, apiConfig });
+    } catch (err) {
+      console.warn('大模型生成案卷失败，自动使用离线神秘古卷:', err);
+    }
+  }
+
+  // 离线备选奇谭生成
+  return generateOfflineCase({ theme, category });
+}
+
+async function callLLMCaseGenerator({ theme, category, apiConfig }) {
+  const caseId = 'ai_case_' + Date.now();
+  const systemPrompt = `你是一名享誉世界的情境推理（海龟汤）设计大师与哥特悬疑小说家。
+请为玩家创作一桩全新的、逻辑极其严密、反转震撼、绝无漏洞的海龟汤案件。
+
+【创作要求】：
+1. 风格类别：${category}，主题倾向：${theme}。
+2. 谜面（汤面）：2-3句话，简短、离奇、充满悬念与反常行为，让人百思不得其解。
+3. 真实真相（汤底）：因果逻辑严密、合乎情理但意料之外的完整故事（80-160字）。绝不能有超自然鬼怪，必须符合现实物理/心理逻辑。
+4. 拆解4块关键疑团线索（clues，每个带有3-6个用于语义匹配的关键词matchKeywords）。
+5. 提供4个启发性的调查员发问灵感（suggestedQuestions）。
+6. 一句充满文学宿命感/讽刺感的结案哲学金句（quote）。
+
+必须严格只输出合法的 JSON 对象，不要包含 markdown 标记代码块，格式如下：
+{
+  "id": "${caseId}",
+  "title": "案卷名称 (4-8字，如《午夜人偶馆》)",
+  "category": "${category}",
+  "difficulty": "★★★★☆",
+  "intro": "一句话暗黑氛围引入",
+  "quote": "文学金句",
+  "question": "汤面谜面",
+  "truth": "完整故事真相",
+  "suggestedQuestions": ["问题1", "问题2", "问题3", "问题4"],
+  "clues": [
+    { "id": 1, "title": "线索1名称", "desc": "线索说明", "matchKeywords": ["关键词1", "关键词2"] },
+    { "id": 2, "title": "线索2名称", "desc": "线索说明", "matchKeywords": ["关键词1", "关键词2"] },
+    { "id": 3, "title": "线索3名称", "desc": "线索说明", "matchKeywords": ["关键词1", "关键词2"] },
+    { "id": 4, "title": "线索4名称", "desc": "线索说明", "matchKeywords": ["关键词1", "关键词2"] }
+  ],
+  "isAICreated": true
+}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+  let response;
+  try {
+    response = await fetch(apiConfig.endpoint || 'https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiConfig.apiKey.trim()}`
+      },
+      body: JSON.stringify({
+        model: apiConfig.model || 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `请立即开始生成这桩《${theme}》主题的全新海龟汤！` }
+        ],
+        temperature: 0.8
+      }),
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const data = await response.json();
+  const rawText = data.choices[0].message.content.trim();
+  const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+  const caseObj = JSON.parse(cleaned);
+
+  if (!caseObj.id) caseObj.id = caseId;
+  caseObj.isAICreated = true;
+  return caseObj;
+}
+
+function generateOfflineCase({ theme, category }) {
+  const offlinePool = [
+    {
+      title: '午夜收音机',
+      category: '细思极恐',
+      difficulty: '★★★☆☆',
+      intro: '电流杂音的尽头，播放着来自明天的讣告。',
+      quote: '人们常常恐惧未知，却不知道最恐怖的往往是不可更改的既定事实。',
+      question: '老张独居在深山小屋，每天深夜都会准时打开老式收音机。某天深夜，收音机播完后，他微笑着躺在床上静静等待死亡。为什么？',
+      truth: '老张是一名身患绝症晚期的护林员，深居与世隔绝的高山观测站。他收音机里收听的是山下大坝泄洪预警广播。当晚暴雨倾盆，收音机播报由于洪水过大下游数万人危在旦夕，唯一的办法是立即炸开上游水闸牺牲高山林区泄洪。老张知道水闸一开自己的小屋就会瞬间被滔天洪水吞没，但他心甘情愿为了拯救山下千千万万的村民而牺牲，平静地拥抱了生命的落幕。',
+      suggestedQuestions: ['收音机播报了泄洪消息？', '老张是为了救下游村民？', '他身患绝症没有逃跑？', '小屋很快会被洪水吞噬？'],
+      clues: [
+        { id: 1, title: '绝境中的使命', desc: '老张是高山观测站的护林员', matchKeywords: ['护林员', '独居', '深山', '工作', '大坝'] },
+        { id: 2, title: '绝望的广播', desc: '收音机播报了即将炸闸泄洪的最高通报', matchKeywords: ['泄洪', '放水', '大水', '水库', '广播', '淹没'] },
+        { id: 3, title: '生命的奉献', desc: '炸闸泄洪是为了保全下游成千上万条人命', matchKeywords: ['救人', '下游', '村庄', '牺牲', '成全'] },
+        { id: 4, title: '坦然的离去', desc: '他本就身患绝症，微笑接受了崇高的牺牲', matchKeywords: ['生病', '绝症', '死得其所', '坦然', '微笑'] }
+      ]
+    },
+    {
+      title: '不存在的乘客',
+      category: '荒诞哥特',
+      difficulty: '★★★★☆',
+      intro: '夜班末班车上，多出来的那位沉默旅人。',
+      quote: '你以为你在审视镜子里的鬼怪，鬼怪却在哀悼已经死去的你。',
+      question: '一辆午夜末班公交车上只有司机和一个女乘客。司机看了一眼后视镜突然猛踩刹车跳车狂逃，而女乘客看了一眼车门后也绝望地跳窗摔死。为什么？',
+      truth: '司机在起步前突发急性脑溢血当场猝死，但在猝死前身体肌肉痉挛僵死，脚狠狠焊死在油门上导致公交车在盘山公路上失控狂飙。女乘客在后排看到司机在座位上一动不动（甚至头部以诡异角度耷拉着），以为被恶鬼附体，吓得跳窗摔死。司机其实早已断气，所谓的“猛踩刹车跳车狂逃”只是女乘客在惊恐狂乱中的幻觉。',
+      suggestedQuestions: ['司机其实在起步前就已经猝死了？', '公交车当时处于失控狂飙状态？', '女乘客以为司机是鬼？', '跳窗是出于极度恐惧？'],
+      clues: [
+        { id: 1, title: '死去的驾驶员', desc: '司机早在车辆失控前就突发急病身亡了', matchKeywords: ['猝死', '死了', '生病', '脑溢血', '心脏病', '早已死'] },
+        { id: 2, title: '失控的钢铁巨兽', desc: '公交车脚踏板被死者僵硬的脚卡死在高速状态', matchKeywords: ['卡死', '油门', '失控', '狂飙', '盘山路'] },
+        { id: 3, title: '恐惧的误解', desc: '女乘客将死者的僵硬尸相误认作恶鬼', matchKeywords: ['鬼', '误会', '害怕', '以为是鬼', '吓坏'] },
+        { id: 4, title: '致命的逃生', desc: '在极度恐慌中跳出高速行驶的车窗身亡', matchKeywords: ['跳窗', '摔死', '逃命', '绝望'] }
+      ]
+    }
+  ];
+
+  const chosen = offlinePool[Math.floor(Math.random() * offlinePool.length)];
+  return {
+    ...chosen,
+    id: 'ai_case_' + Date.now(),
+    isAICreated: true
+  };
+}

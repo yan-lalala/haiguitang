@@ -27,11 +27,12 @@ export async function judgeQuestion({ soup, question, unlockedClueIds, apiConfig
  */
 function localJudgeRule({ soup, question, unlockedClueIds }) {
   const normalizedQ = question.trim().toLowerCase();
+  const cluesList = Array.isArray(soup.clues) ? soup.clues : [];
 
   // 1. 检查是否命中线索的专属关键词（即使 mockRules 没写完整，只要线索 keywords 命中也触发）
   let newUnlockedClue = null;
-  for (const clue of soup.clues) {
-    if (!unlockedClueIds.includes(clue.id)) {
+  for (const clue of cluesList) {
+    if (!unlockedClueIds.includes(clue.id) && Array.isArray(clue.matchKeywords)) {
       const isMatch = clue.matchKeywords.some(kw => normalizedQ.includes(kw.toLowerCase()));
       if (isMatch) {
         newUnlockedClue = clue;
@@ -40,21 +41,23 @@ function localJudgeRule({ soup, question, unlockedClueIds }) {
     }
   }
 
-  // 2. 检查具体的 mockRules 预设问答
-  for (const rule of soup.mockRules) {
+  // 2. 检查具体的 mockRules 预设问答（做防御性容错，兼容 AI 创编案件）
+  const mockRules = Array.isArray(soup.mockRules) ? soup.mockRules : [];
+  for (const rule of mockRules) {
+    if (!rule || !Array.isArray(rule.keys)) continue;
     const isHit = rule.keys.some(k => normalizedQ.includes(k.toLowerCase()));
     if (isHit) {
       // 如果规则本身绑定了线索，且该线索未解锁
       let triggerClueObj = null;
       if (rule.triggerClue && !unlockedClueIds.includes(rule.triggerClue)) {
-        triggerClueObj = soup.clues.find(c => c.id === rule.triggerClue);
+        triggerClueObj = cluesList.find(c => c.id === rule.triggerClue);
       } else if (newUnlockedClue) {
         triggerClueObj = newUnlockedClue;
       }
 
       return {
-        judgment: rule.answer, // '是' | '否' | '无关' | '是也不是'
-        dmComment: rule.comment || '...',
+        judgment: rule.answer || '是', // '是' | '否' | '无关' | '是也不是'
+        dmComment: rule.comment || '庄园主冷眼凝视着你，微微颔首。',
         newClue: triggerClueObj,
         isCustom: false
       };
@@ -155,7 +158,7 @@ ${cluesPrompt}
 {"judgment":"是","dm_comment":"法官旁白","new_unlocked_clue_id":null}`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   let response;
   try {
@@ -163,7 +166,7 @@ ${cluesPrompt}
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiConfig.apiKey}`
+        'Authorization': `Bearer ${(apiConfig.apiKey || '').trim()}`
       },
       body: JSON.stringify({
         model: apiConfig.model || 'deepseek-chat',
@@ -179,19 +182,36 @@ ${cluesPrompt}
     clearTimeout(timeoutId);
   }
 
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`API HTTP ${response.status}: ${errText.slice(0, 100)}`);
+  }
+
   const data = await response.json();
-  const rawText = data.choices[0].message.content.trim();
+  const rawText = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '{}';
   const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-  const resObj = JSON.parse(cleaned);
+  
+  let resObj = {};
+  try {
+    resObj = JSON.parse(cleaned);
+  } catch (parseErr) {
+    // 兼容大模型偶然吐出非规范 JSON 的容错解析
+    let looseJudgment = '是';
+    if (cleaned.includes('是也不是')) looseJudgment = '是也不是';
+    else if (cleaned.includes('否') || cleaned.includes('不是')) looseJudgment = '否';
+    else if (cleaned.includes('无关')) looseJudgment = '无关';
+    resObj = { judgment: looseJudgment, dm_comment: cleaned.slice(0, 30) };
+  }
 
   let newClue = null;
-  if (resObj.new_unlocked_clue_id && !unlockedClueIds.includes(resObj.new_unlocked_clue_id)) {
-    newClue = soup.clues.find(c => c.id === resObj.new_unlocked_clue_id);
+  const clueId = resObj.new_unlocked_clue_id || resObj.newUnlockedClueId;
+  if (clueId && !unlockedClueIds.includes(clueId)) {
+    newClue = soup.clues.find(c => c.id === clueId);
   }
 
   return {
     judgment: resObj.judgment || '是',
-    dmComment: resObj.dmComment || resObj.dm_comment || '...',
+    dmComment: resObj.dmComment || resObj.dm_comment || '庄园法官静默注视，在卷宗上划下一笔。',
     newClue: newClue,
     isCustom: true
   };

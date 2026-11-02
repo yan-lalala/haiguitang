@@ -1068,7 +1068,11 @@ export default {
           });
         }
       } catch (err) {
-        uni.showToast({ title: '迷雾遮蔽了判决，请重试', icon: 'none' });
+        console.error('发问判决异常:', err);
+        const tip = (err && err.message && err.message.includes('401'))
+          ? 'API Key 鉴权失败，请检查设置'
+          : '迷雾遮蔽了判决（请重试）';
+        uni.showToast({ title: tip, icon: 'none' });
       } finally {
         this.isThinking = false;
         this.scrollToBottom();

@@ -72,7 +72,12 @@
 
         <view class="manor-decree">
           <text class="decree-icon">🕯️</text>
-          <text class="decree-text">向庄园主理人求证真伪。裁决唯有：【真】、【伪】、【无涉】、【亦真亦幻】</text>
+          <text class="decree-text" v-if="apiConfig.enabled && apiConfig.apiKey">
+            【虚空大模型 ({{ apiConfig.model || 'AI' }}) 亲自执槌】向庄园主求证真伪。裁决唯有：【真】、【伪】、【无涉】、【亦真亦幻】
+          </text>
+          <text class="decree-text" v-else>
+            【庄园管家 (内置智能判定)】向庄园主理人求证真伪。裁决唯有：【真】、【伪】、【无涉】、【亦真亦幻】
+          </text>
         </view>
       </view>
 
@@ -146,7 +151,7 @@
             <view class="manor-ruling-bar">
               <view class="identity-tag hunter-tag">
                 <text class="tag-mark">🗝️</text>
-                <text class="tag-name">庄园裁决</text>
+                <text class="tag-name">{{ item.modelName ? ('庄园主 · ' + item.modelName) : '庄园裁决' }}</text>
               </view>
               <!-- 哥特火漆印章判决 -->
               <view class="wax-seal" :class="getWaxSealClass(item.judgment)">
@@ -166,7 +171,9 @@
 
         <view v-if="isThinking" class="manor-whisper">
           <text class="whisper-candle">🕯️</text>
-          <text class="whisper-text">留声机吱呀作响，暗夜里的目光正在凝视案卷...</text>
+          <text class="whisper-text">
+            {{ (apiConfig.enabled && apiConfig.apiKey) ? `大模型 (${apiConfig.model || 'AI'}) 正在审视案卷推演真伪...` : '留声机吱呀作响，暗夜里的目光正在凝视案卷...' }}
+          </text>
         </view>
       </view>
     </scroll-view>
@@ -256,20 +263,34 @@
             <text class="setting-desc-label">连接虚空大模型 (LLM)：</text>
             <switch :checked="apiConfig.enabled" @change="e => apiConfig.enabled = e.detail.value" color="#991b1b" />
           </view>
+          <!-- 快捷预设模板 -->
+          <view v-if="apiConfig.enabled" class="presets-section">
+            <text class="presets-title">⚡ 一键填入主流大模型参数：</text>
+            <view class="presets-pills">
+              <view class="preset-pill" @tap="applyPreset('deepseek')">DeepSeek</view>
+              <view class="preset-pill" @tap="applyPreset('kimi')">Kimi (月之暗面)</view>
+              <view class="preset-pill" @tap="applyPreset('glm')">智谱GLM-4</view>
+              <view class="preset-pill" @tap="applyPreset('openai')">OpenAI</view>
+            </view>
+          </view>
+
           <view v-if="apiConfig.enabled" class="gothic-inputs-group">
             <text class="gothic-field-name">Endpoint 仪式端点:</text>
             <input class="gothic-input-field" v-model="apiConfig.endpoint" placeholder="https://api.deepseek.com/v1/chat/completions" />
 
-            <text class="gothic-field-name">Secret Key 密匙:</text>
+            <text class="gothic-field-name">Secret Key 密匙 (API Key):</text>
             <input class="gothic-input-field" v-model="apiConfig.apiKey" placeholder="sk-xxxx" password />
 
-            <text class="gothic-field-name">Entity Model 实体代码:</text>
+            <text class="gothic-field-name">Entity Model 实体代码 (Model ID):</text>
             <input class="gothic-input-field" v-model="apiConfig.model" placeholder="deepseek-chat" />
           </view>
           <view class="grimoire-note">
-            <text class="grimoire-text">📜 若不开启或留空，将由庄园管家（智能模拟判定）主持这局推演，零延迟零费用，随时开启。</text>
+            <text class="grimoire-text">📜 开启后，大模型将以【上帝视角】通读谜面与所有隐藏真相，亲自担任庄园主理人（DM），裁决玩家的发问与终局指证！</text>
           </view>
-          <button class="gothic-confirm-btn" @tap="saveSettings">刻印保存</button>
+          <view class="settings-action-btns">
+            <button v-if="apiConfig.enabled" class="gothic-test-btn" @tap="testApiConnection">🧪 测通大模型</button>
+            <button class="gothic-confirm-btn" @tap="saveSettings">刻印并任命为主理人</button>
+          </view>
         </view>
       </view>
     </view>
@@ -828,6 +849,8 @@ export default {
           judgment: res.judgment,
           dmComment: res.dmComment,
           newClue: newClue,
+          isCustom: res.isCustom,
+          modelName: res.isCustom ? (this.apiConfig.model || '大模型') : '',
           timestamp: Date.now()
         };
 
@@ -930,10 +953,77 @@ export default {
       const nextIdx = (this.currentSoupIndex + 1) % this.allSoups.length;
       this.switchCase(this.allSoups[nextIdx]);
     },
+    applyPreset(type) {
+      if (type === 'deepseek') {
+        this.apiConfig.endpoint = 'https://api.deepseek.com/v1/chat/completions';
+        this.apiConfig.model = 'deepseek-chat';
+        uni.showToast({ title: '已填入 DeepSeek 预设，请填入 Key', icon: 'none' });
+      } else if (type === 'kimi') {
+        this.apiConfig.endpoint = 'https://api.moonshot.cn/v1/chat/completions';
+        this.apiConfig.model = 'moonshot-v1-8k';
+        uni.showToast({ title: '已填入 Kimi 预设，请填入 Key', icon: 'none' });
+      } else if (type === 'glm') {
+        this.apiConfig.endpoint = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+        this.apiConfig.model = 'glm-4-flash';
+        uni.showToast({ title: '已填入 智谱GLM 预设，请填入 Key', icon: 'none' });
+      } else if (type === 'openai') {
+        this.apiConfig.endpoint = 'https://api.openai.com/v1/chat/completions';
+        this.apiConfig.model = 'gpt-4o-mini';
+        uni.showToast({ title: '已填入 OpenAI 预设，请填入 Key', icon: 'none' });
+      }
+    },
+    async testApiConnection() {
+      if (!this.apiConfig.apiKey || !this.apiConfig.apiKey.trim()) {
+        uni.showToast({ title: '请先填入 Secret Key 密匙', icon: 'none' });
+        return;
+      }
+      uni.showLoading({ title: '正在连接大模型...' });
+      try {
+        const res = await fetch(this.apiConfig.endpoint || 'https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiConfig.apiKey.trim()}`
+          },
+          body: JSON.stringify({
+            model: this.apiConfig.model || 'deepseek-chat',
+            messages: [{ role: 'user', content: '测试' }],
+            max_tokens: 5
+          })
+        });
+        uni.hideLoading();
+        if (res.ok) {
+          uni.showModal({
+            title: '🔮 契约结成！',
+            content: `成功连接大模型【${this.apiConfig.model || 'deepseek-chat'}】！\n它已正式成为本庄园的至高主理人（DM），将实时裁决你的每一次发问！`,
+            showCancel: false,
+            confirmText: '太棒了'
+          });
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          uni.showModal({
+            title: '❌ 连接异常',
+            content: `状态码: ${res.status}\n原因: ${errData.error?.message || '密钥无效或接口不可达'}`,
+            showCancel: false
+          });
+        }
+      } catch (err) {
+        uni.hideLoading();
+        uni.showModal({
+          title: '❌ 网络连接错误',
+          content: String(err.message || err),
+          showCancel: false
+        });
+      }
+    },
     saveSettings() {
       try {
         uni.setStorageSync('turtle_soup_api_config', JSON.stringify(this.apiConfig));
-        uni.showToast({ title: '已铭刻秘印', icon: 'success' });
+        if (this.apiConfig.enabled && this.apiConfig.apiKey) {
+          uni.showToast({ title: `已任命【${this.apiConfig.model || '大模型'}】为主理人`, icon: 'success' });
+        } else {
+          uni.showToast({ title: '已切换为庄园管家主持', icon: 'none' });
+        }
       } catch (e) {}
       this.showSettings = false;
     },
@@ -2240,10 +2330,60 @@ export default {
   line-height: 1.5;
 }
 
+.presets-section {
+  margin-bottom: 20rpx;
+}
+
+.presets-title {
+  font-size: 22rpx;
+  color: #d97706;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.presets-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.preset-pill {
+  background: #241a12;
+  border: 1px solid #785a38;
+  color: #fef08a;
+  font-size: 22rpx;
+  font-weight: 700;
+  padding: 6rpx 16rpx;
+  border-radius: 20rpx;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.preset-pill:active {
+  background: #991b1b;
+  border-color: #ef4444;
+}
+
+.settings-action-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.gothic-test-btn {
+  background: #1e293b;
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  font-size: 26rpx;
+  font-weight: 800;
+  border-radius: 8rpx;
+}
+
 .gothic-confirm-btn {
-  background: #503d27;
-  border: 1px solid #8c6a42;
-  color: #f4e8d3;
+  background: linear-gradient(135deg, #7c2d12, #451a03);
+  border: 1px solid #b45309;
+  color: #fef3c7;
   font-size: 28rpx;
   font-weight: 800;
   border-radius: 8rpx;

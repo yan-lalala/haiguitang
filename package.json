@@ -2,6 +2,8 @@
   "name": "uni-preset-vue",
   "version": "0.0.0",
   "scripts": {
+    "start": "node server.js",
+    "build": "npm run build:h5",
     "server": "node server.js",
     "dev:custom": "uni -p",
     "dev:h5": "uni",

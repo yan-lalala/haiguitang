@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: eurydice-manor
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install && npm run build:h5
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 18.20.0

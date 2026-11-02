@@ -1,7 +1,71 @@
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { WebSocketServer, WebSocket } = require('ws');
 
-const PORT = 3000;
-const wss = new WebSocketServer({ port: PORT });
+const PORT = process.env.PORT || 3000;
+const STATIC_DIR = path.join(__dirname, 'dist', 'build', 'h5');
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf'
+};
+
+// 创建统一的 HTTP 服务器（既托管静态 H5 游戏，又提供健康检查与 WebSocket 握手）
+const server = http.createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/ping') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
+    return;
+  }
+
+  let reqPath = req.url.split('?')[0];
+  if (reqPath === '/' || !reqPath) reqPath = '/index.html';
+
+  let filePath = path.join(STATIC_DIR, reqPath);
+
+  if (!filePath.startsWith(STATIC_DIR)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+
+  fs.stat(filePath, (err, stats) => {
+    if (!err && stats.isFile()) {
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': contentType });
+      fs.createReadStream(filePath).pipe(res);
+    } else {
+      // SPA Fallback: 路由重定向回 index.html
+      const indexPath = path.join(STATIC_DIR, 'index.html');
+      fs.stat(indexPath, (indexErr, indexStats) => {
+        if (!indexErr && indexStats.isFile()) {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          fs.createReadStream(indexPath).pipe(res);
+        } else {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end('<h1>Eurydice Manor Server is running!</h1><p>Please compile the frontend using <code>npm run build:h5</code>.</p>');
+        }
+      });
+    }
+  });
+});
+
+const wss = new WebSocketServer({ server });
 
 // 内存房间映射表：roomId -> room
 const rooms = new Map();
@@ -229,4 +293,6 @@ wss.on('connection', (ws) => {
   });
 });
 
-console.log(`🕯️ 庄园双人联机 WebSocket 服务器已在端口 ${PORT} 启动 (ws://localhost:${PORT})`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🕯️ 庄园云端服务器已在端口 ${PORT} 启动 (http://localhost:${PORT} / ws://localhost:${PORT})`);
+});

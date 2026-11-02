@@ -19,9 +19,26 @@ class ManorSocketClient {
 
     let serverUrl = customUrl;
     if (!serverUrl) {
+      try {
+        const savedWs = uni.getStorageSync('manor_custom_ws_url');
+        if (savedWs && savedWs.trim()) {
+          serverUrl = savedWs.trim();
+        }
+      } catch (e) {}
+    }
+
+    if (!serverUrl) {
       if (typeof window !== 'undefined' && window.location) {
+        const isHttps = window.location.protocol === 'https:';
         const host = window.location.hostname || 'localhost';
-        serverUrl = `ws://${host}:3000`;
+        const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('10.') || host.startsWith('192.168.');
+        if (isLocal) {
+          serverUrl = `ws://${host}:3000`;
+        } else {
+          // 云端生产环境：自动采用安全 WebSocket (wss://) 并共享主域名与端口
+          const wsProtocol = isHttps ? 'wss:' : 'ws:';
+          serverUrl = `${wsProtocol}//${window.location.host}`;
+        }
       } else {
         serverUrl = 'ws://127.0.0.1:3000';
       }

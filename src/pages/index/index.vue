@@ -46,10 +46,17 @@
       <view class="parchment-case">
         <view class="clip-pin"></view>
         <view class="case-badge-row">
-          <text class="gothic-stamp-tag">{{ currentSoup.category }}</text>
-          <view class="danger-level">
-            <text class="danger-label">诡秘度</text>
-            <text class="star-rating">{{ currentSoup.difficulty }}</text>
+          <view class="badge-left">
+            <text class="gothic-stamp-tag">{{ currentSoup.category }}</text>
+            <view class="danger-level">
+              <text class="danger-label">诡秘度</text>
+              <text class="star-rating">{{ currentSoup.difficulty }}</text>
+            </view>
+          </view>
+          <!-- 实在猜不出时的直接揭晓入口 -->
+          <view class="give-up-pill" @tap="revealTruthDirectly">
+            <text class="give-up-icon">👁️</text>
+            <text class="give-up-txt">揭晓答案</text>
           </view>
         </view>
 
@@ -453,6 +460,9 @@
           <button class="blood-strike-btn" :disabled="!truthAttemptInput.trim() || isThinking" @tap="submitTruth">
             落槌指证！
           </button>
+          <view class="solve-give-up-link" @tap="revealTruthDirectly">
+            <text class="solve-give-up-txt">实在猜不出来？破开封泥直接揭晓真相 ➔</text>
+          </view>
         </view>
       </view>
     </view>
@@ -644,6 +654,9 @@
           <view v-else class="all-hints-unlocked-tip">
             <text>⚜️ 本卷宗的所有灵感密笺已全部解封 ⚜️</text>
           </view>
+          <view class="hints-give-up-row" @tap="revealTruthDirectly">
+            <text class="hints-give-up-txt">🕯️ 实在推导不出？破拆绝密封条，直接揭晓全案真相 ➔</text>
+          </view>
         </view>
       </view>
     </view>
@@ -681,6 +694,7 @@ export default {
       showHintsModal: false,
       unlockedHintLevels: {},
       finalScore: 0,
+      isDirectlyRevealed: false,
 
       // AI 卷宗生成状态
       showCaseCreator: false,
@@ -1177,6 +1191,28 @@ export default {
         this.isThinking = false;
       }
     },
+    revealTruthDirectly() {
+      uni.showModal({
+        title: '🕯️ 破拆绝密封泥？',
+        content: '一旦破拆封泥，本案的完整因果（汤底）将瞬间无所遁形，您将失去自主推理解开谜题的成就感。\n\n是否确认直接揭晓本案完整真相？',
+        confirmText: '破拆查看',
+        cancelText: '我再想想',
+        confirmColor: '#dc2626',
+        success: (res) => {
+          if (res.confirm) {
+            this.showHintsModal = false;
+            this.showSolveModal = false;
+            this.unlockedClueIds = this.currentSoup.clues.map(c => c.id);
+            this.finalScore = 100;
+            this.isDirectlyRevealed = true;
+            this.showCaseSolvedModal = true;
+            manorAudio.playChurchBell();
+            try { uni.vibrateShort(); } catch (e) {}
+            uni.showToast({ title: '封泥已破拆，全案真相大白！', icon: 'none' });
+          }
+        }
+      });
+    },
     switchCase(soup) {
       const idx = this.allSoups.findIndex(s => s.id === soup.id);
       if (idx !== -1) {
@@ -1185,6 +1221,7 @@ export default {
         this.history = [];
         this.sanValue = 100;
         this.truthAttemptInput = '';
+        this.isDirectlyRevealed = false;
         this.showCaseSelector = false;
 
         if (this.isMultiplayer) {
@@ -1688,6 +1725,41 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20rpx;
+}
+
+.badge-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.give-up-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  background: rgba(35, 20, 20, 0.7);
+  border: 1px dashed rgba(239, 68, 68, 0.55);
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  cursor: pointer;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+.give-up-pill:active {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #f87171;
+}
+
+.give-up-icon {
+  font-size: 22rpx;
+}
+
+.give-up-txt {
+  font-size: 20rpx;
+  color: #f87171;
+  font-weight: 700;
+  letter-spacing: 1rpx;
 }
 
 .gothic-stamp-tag {
@@ -2974,6 +3046,24 @@ export default {
   box-shadow: 0 4rpx 16rpx rgba(185, 28, 28, 0.5);
 }
 
+.solve-give-up-link {
+  text-align: center;
+  margin-top: 18rpx;
+  padding: 6rpx 0;
+  cursor: pointer;
+}
+
+.solve-give-up-txt {
+  font-size: 22rpx;
+  color: #a8947b;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.solve-give-up-txt:active {
+  color: #ef4444;
+}
+
 /* 结案大捷 */
 .verdict-completed-box {
   text-align: center;
@@ -3565,5 +3655,24 @@ export default {
   color: #c59b27;
   padding: 10rpx 0;
   letter-spacing: 2rpx;
+}
+
+.hints-give-up-row {
+  text-align: center;
+  margin-top: 18rpx;
+  padding: 8rpx 0;
+  cursor: pointer;
+}
+
+.hints-give-up-txt {
+  font-size: 22rpx;
+  color: #ef4444;
+  text-decoration: underline;
+  letter-spacing: 1rpx;
+  transition: opacity 0.2s;
+}
+
+.hints-give-up-txt:active {
+  opacity: 0.7;
 }
 </style>

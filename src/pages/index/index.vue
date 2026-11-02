@@ -207,7 +207,7 @@
       <!-- 火漆印章风格：指证结案 -->
       <button class="blood-verdict-btn" @tap="openSolveModal">
         <text class="verdict-icon">⚖️</text>
-        <text class="verdict-label">终局指证</text>
+        <text class="verdict-label">指证 ({{ unlockedClueIds.length }}/{{ currentSoup.clues.length }})</text>
       </button>
 
       <!-- 凹槽打字机输入框 -->
@@ -431,7 +431,19 @@
           <text class="modal-dismiss" @tap="showSolveModal = false">✕</text>
         </view>
         <view class="solve-body">
-          <text class="solve-lead">将所有缝合的碎片串联，在白纸黑字上写下你的真相：</text>
+          <!-- 拼合线索状态条 -->
+          <view class="solve-clue-bar">
+            <view class="solve-clue-meta">
+              <text class="solve-clue-icon">🧩</text>
+              <text class="solve-clue-status">
+                {{ unlockedClueIds.length >= currentSoup.clues.length ? '已集齐全部真相拼图 (4/4)' : `已拼合 ${unlockedClueIds.length}/${currentSoup.clues.length} 块残页 (未全解，已按现有线索自动串联)` }}
+              </text>
+            </view>
+            <view class="re-assemble-pill" @tap="autoAssembleClues(true)">
+              <text class="re-assemble-txt">🔄 重新拼凑</text>
+            </view>
+          </view>
+          <text class="solve-lead">已自动将已解开的真相残页串联并填入，可直接落槌或补充润色：</text>
           <textarea
             class="gothic-textarea"
             v-model="truthAttemptInput"
@@ -1063,9 +1075,59 @@ export default {
       }
     },
     openSolveModal() {
+      // 少于 2 个残页：线索零落
+      if (this.unlockedClueIds.length < 2) {
+        uni.showModal({
+          title: '📜 线索零落 · 难窥全貌',
+          content: `当前仅寻得 ${this.unlockedClueIds.length}/4 块真相残页（少于 2 块）。\n因果脉络支离破碎，此时指证无异于凭空盲猜，庄园主定会冷言驳回！\n请继续向案卷发问探寻。`,
+          showCancel: false,
+          confirmText: '继续探案',
+          confirmColor: '#c59b27'
+        });
+        return;
+      }
+
+      // 刚好 2 个残页：未达到大于 2 块的门槛
+      if (this.unlockedClueIds.length === 2) {
+        uni.showModal({
+          title: '📜 碎片残缺 · 因果未闭',
+          content: `当前已拼获 2/4 块真相残页（需解开大于 2 块核心残页方可指证）。\n关键死因与动机仍有一半深埋迷雾，盲目落槌极易判定失败！\n请至少再追问出 1 块关键线索（解开 3 块以上）方可指证！`,
+          showCancel: false,
+          confirmText: '继续追查',
+          confirmColor: '#c59b27'
+        });
+        return;
+      }
+
+      // 大于 2 个残页（3 块或 4 块）：自动拼凑已解开的残页并填入复盘框
+      this.autoAssembleClues(false);
       this.showSolveModal = true;
     },
+    autoAssembleClues(showToast = true) {
+      const unlocked = this.currentSoup.clues.filter(c => this.unlockedClueIds.includes(c.id));
+      if (unlocked.length === 0) return;
+
+      const isFull = unlocked.length === this.currentSoup.clues.length;
+      const header = isFull
+        ? '【全案四重真相 · 终局因果闭环】'
+        : `【残卷拼图 · 已获 ${unlocked.length}/${this.currentSoup.clues.length} 块核心因果】`;
+
+      const lines = unlocked.map((c, i) => `${i + 1}. 【${c.title}】：${c.desc}`);
+      this.truthAttemptInput = `${header}\n${lines.join('\n')}`;
+
+      if (showToast) {
+        uni.showToast({
+          title: isFull ? '✨ 已拼合完整全案碎片！' : `🧩 已拼合 ${unlocked.length} 块已解残页！`,
+          icon: 'none',
+          duration: 2000
+        });
+      }
+    },
     async submitTruth() {
+      if (this.unlockedClueIds.length <= 2) {
+        uni.showToast({ title: '真相残页需大于 2 块方可落槌指证！', icon: 'none' });
+        return;
+      }
       const text = this.truthAttemptInput.trim();
       if (!text) return;
 
@@ -1118,6 +1180,7 @@ export default {
         this.unlockedClueIds = [];
         this.history = [];
         this.sanValue = 100;
+        this.truthAttemptInput = '';
         this.showCaseSelector = false;
 
         if (this.isMultiplayer) {
@@ -2830,6 +2893,51 @@ export default {
 }
 
 /* 还原真相指证 */
+.solve-clue-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+  background: rgba(30, 24, 18, 0.7);
+  border: 1px dashed rgba(217, 119, 6, 0.4);
+  border-radius: 8rpx;
+  padding: 10rpx 14rpx;
+  gap: 10rpx;
+}
+
+.solve-clue-meta {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex: 1;
+}
+
+.solve-clue-icon {
+  font-size: 24rpx;
+}
+
+.solve-clue-status {
+  font-size: 22rpx;
+  color: #fbbf24;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.re-assemble-pill {
+  background: rgba(217, 119, 6, 0.2);
+  border: 1px solid #d97706;
+  border-radius: 20rpx;
+  padding: 4rpx 14rpx;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.re-assemble-txt {
+  font-size: 20rpx;
+  color: #fde68a;
+  font-weight: bold;
+}
+
 .solve-lead {
   font-size: 24rpx;
   color: #9e8d78;
@@ -2839,16 +2947,16 @@ export default {
 
 .gothic-textarea {
   width: 100%;
-  height: 250rpx;
+  height: 290rpx;
   background: #0d0c11;
   border: 2rpx solid #4a3a27;
   color: #eddac0;
   padding: 18rpx;
   border-radius: 10rpx;
-  font-size: 26rpx;
+  font-size: 25rpx;
   box-sizing: border-box;
   margin-bottom: 22rpx;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .blood-strike-btn {

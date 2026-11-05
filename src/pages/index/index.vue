@@ -15,12 +15,6 @@
       </view>
 
       <view class="header-actions">
-        <!-- 核心音效试听按钮 (点击必定发声) -->
-        <view class="sound-test-pill" @tap.stop="listenTestSound" title="试听全套庄园音效">
-          <text class="sound-pulse-icon">🔔</text>
-          <text class="sound-pill-txt">试听音效</text>
-        </view>
-
         <!-- 静音切换按钮 -->
         <view class="sound-mute-btn" @tap.stop="toggleSound" :class="{ muted: isMuted }" :title="isMuted ? '解除静音' : '静音'">
           <text class="mute-icon">{{ isMuted ? '🔇' : '🔊' }}</text>
@@ -113,7 +107,8 @@
             <view class="patch-tack"></view>
             <view class="patch-inner">
               <view class="patch-badge">
-                <text v-if="unlockedClueIds.includes(clue.id)" class="revealed-eye">👁️ 证词</text>
+                <image v-if="unlockedClueIds.includes(clue.id)" class="clue-wax-seal-img" src="/static/figma/wax_seal_small_red.png" mode="aspectFit" />
+                <text v-if="unlockedClueIds.includes(clue.id)" class="revealed-eye">已证实 · 证据</text>
                 <text v-else class="stitched-eye">🪡 封缄</text>
               </view>
               <text class="patch-title">
@@ -162,6 +157,9 @@
               </view>
               <!-- 哥特火漆印章判决 -->
               <view class="wax-seal" :class="getWaxSealClass(item.judgment)">
+                <image v-if="item.judgment === '是'" class="seal-stamp-img" src="/static/figma/wax_seal_green.png" mode="aspectFit" />
+                <image v-else-if="item.judgment === '否'" class="seal-stamp-img" src="/static/figma/wax_seal_red.png" mode="aspectFit" />
+                <image v-else-if="item.judgment === '是也不是'" class="seal-stamp-img" src="/static/figma/wax_seal_small_red.png" mode="aspectFit" />
                 <text class="wax-seal-text">{{ formatJudgmentText(item.judgment) }}</text>
               </view>
             </view>
@@ -476,6 +474,7 @@
     <view class="gothic-modal-mask" v-if="showCaseSolvedModal">
       <view class="parchment-modal-box verdict-completed-box" @tap.stop>
         <view class="gothic-blood-stamp">
+          <image class="victory-wax-seal" src="/static/figma/wax_seal_red.png" mode="aspectFit" />
           <text class="stamp-char">CASE CLOSED</text>
           <text class="stamp-sub-char">真相大白 · 逃出庄园</text>
         </view>
@@ -1588,9 +1587,11 @@ export default {
   align-items: center;
   padding: 20rpx 28rpx;
   padding-top: calc(env(safe-area-inset-top, 0px) + 20rpx);
-  background: #14121a;
-  border-bottom: 2rpx solid #3d3226;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.6);
+  background-color: #14121a;
+  background-image: url('/static/figma/leather_bg.png');
+  background-repeat: repeat;
+  border-bottom: 2rpx solid #4a3a2a;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.7);
   z-index: 10;
   position: relative;
 }
@@ -1761,9 +1762,10 @@ export default {
   position: relative;
   background-color: #211c16;
   background-image: 
-    linear-gradient(to bottom, rgba(46, 38, 29, 0.95), rgba(28, 23, 17, 0.98)),
-    repeating-linear-gradient(0deg, transparent, transparent 24px, rgba(138, 113, 72, 0.08) 25px);
-  border: 3rpx solid #544432;
+    linear-gradient(to bottom, rgba(38, 30, 22, 0.88), rgba(22, 17, 12, 0.92)),
+    url('/static/figma/parchment_tex.png');
+  background-size: cover;
+  border: 3rpx solid #63503b;
   border-radius: 12rpx;
   padding: 32rpx 28rpx;
   margin-bottom: 30rpx;
@@ -1971,13 +1973,17 @@ export default {
 /* ---------------- 庄园红线线索木板 ---------------- */
 .clue-corkboard {
   background: #18151f;
-  background-image: radial-gradient(circle, rgba(66, 45, 45, 0.15) 1px, transparent 1px);
-  background-size: 20px 20px;
-  border: 3rpx solid #362d22;
+  background-image: 
+    linear-gradient(135deg, rgba(24, 21, 31, 0.94), rgba(20, 16, 14, 0.96)),
+    url('/static/figma/leather_bg.png');
+  background-size: repeat;
+  border: 3rpx solid #4a3b2c;
   border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 32rpx;
-  box-shadow: inset 0 0 40rpx rgba(0,0,0,0.7);
+  box-shadow: 
+    inset 0 0 40rpx rgba(0,0,0,0.8),
+    0 8rpx 24rpx rgba(0,0,0,0.5);
 }
 
 .cork-header {
@@ -2046,17 +2052,33 @@ export default {
   position: absolute;
   top: 8rpx;
   right: 14rpx;
-  width: 14rpx;
-  height: 14rpx;
+  width: 16rpx;
+  height: 16rpx;
   border-radius: 50%;
-  background: #5a4b3d;
-  box-shadow: 0 2rpx 4rpx rgba(0,0,0,0.8);
+  background: radial-gradient(circle at 35% 35%, #ffd700, #b8860b 60%, #4a3822 100%);
+  box-shadow: 0 3rpx 6rpx rgba(0,0,0,0.8), inset 0 1rpx 2rpx rgba(255,255,255,0.4);
+}
+
+.patch-revealed .patch-tack {
+  background: radial-gradient(circle at 35% 35%, #ff8a8a, #dc2626 60%, #7f1d1d 100%);
+  box-shadow: 0 0 10rpx #ef4444, 0 3rpx 6rpx rgba(0,0,0,0.8);
 }
 
 .patch-revealed {
-  background: #292117;
+  background-color: #292117;
+  background-image: 
+    linear-gradient(to bottom, rgba(41, 33, 23, 0.88), rgba(28, 22, 15, 0.92)),
+    url('/static/figma/parchment_tex.png');
+  background-size: cover;
   border: 2rpx solid #a17838;
   box-shadow: 0 0 18rpx rgba(217, 119, 6, 0.25);
+}
+
+.clue-wax-seal-img {
+  width: 28rpx;
+  height: 28rpx;
+  margin-right: 8rpx;
+  flex-shrink: 0;
 }
 
 .patch-revealed .patch-tack {
@@ -2255,38 +2277,61 @@ export default {
 
 /* 哥特火漆印章判词 */
 .wax-seal {
-  padding: 4rpx 18rpx;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6rpx 20rpx;
   border-radius: 8rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.6);
+}
+
+.seal-stamp-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.wax-seal-text {
+  position: relative;
+  z-index: 2;
   font-size: 26rpx;
   font-weight: 900;
   letter-spacing: 2rpx;
+  text-shadow: 0 2rpx 4rpx rgba(0,0,0,0.9);
 }
 
 .seal-true {
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.22);
   border: 2rpx solid #059669;
-  box-shadow: 0 0 14rpx rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 16rpx rgba(16, 185, 129, 0.5);
 }
 
 .seal-false {
-  color: #f87171;
-  background: rgba(220, 38, 38, 0.18);
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.25);
   border: 2rpx solid #b91c1c;
-  box-shadow: 0 0 14rpx rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 16rpx rgba(239, 68, 68, 0.5);
 }
 
 .seal-void {
   color: #9ca3af;
-  background: rgba(156, 163, 175, 0.12);
+  background: rgba(156, 163, 175, 0.14);
   border: 2rpx dashed #4b5563;
 }
 
 .seal-paradox {
-  color: #fbbf24;
-  background: rgba(245, 158, 11, 0.18);
+  color: #fde047;
+  background: rgba(245, 158, 11, 0.25);
   border: 2rpx solid #d97706;
-  box-shadow: 0 0 14rpx rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 16rpx rgba(245, 158, 11, 0.5);
 }
 
 .ruling-echo {
@@ -2298,13 +2343,16 @@ export default {
 
 .blood-clue-ribbon {
   margin-top: 16rpx;
-  padding: 10rpx 16rpx;
-  background: rgba(153, 27, 27, 0.25);
-  border: 2rpx dashed #ef4444;
+  padding: 12rpx 18rpx;
+  background-color: rgba(153, 27, 27, 0.35);
+  background-image: url('/static/figma/ember_tex.png');
+  background-size: cover;
+  border: 2rpx solid #ef4444;
   border-radius: 6rpx;
   display: flex;
   align-items: center;
   gap: 10rpx;
+  box-shadow: 0 0 16rpx rgba(239, 68, 68, 0.4);
 }
 
 .ribbon-flame {
@@ -2416,9 +2464,11 @@ export default {
   gap: 16rpx;
   padding: 18rpx 24rpx;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 18rpx);
-  background: #120f17;
-  border-top: 2rpx solid #3c3224;
-  box-shadow: 0 -8rpx 30rpx rgba(0,0,0,0.7);
+  background-color: #120f17;
+  background-image: url('/static/figma/leather_bg.png');
+  background-repeat: repeat;
+  border-top: 2rpx solid #4a3a2a;
+  box-shadow: 0 -8rpx 30rpx rgba(0,0,0,0.85);
   z-index: 10;
 }
 
@@ -2503,8 +2553,11 @@ export default {
 .parchment-modal-box {
   width: 100%;
   max-width: 620rpx;
-  background: #1c1711;
-  background-image: linear-gradient(to bottom, #231c14, #18130e);
+  background-color: #1a1510;
+  background-image: 
+    linear-gradient(135deg, rgba(32, 25, 18, 0.94), rgba(20, 16, 12, 0.96)),
+    url('/static/figma/parchment_tex.png');
+  background-size: cover;
   border: 3rpx solid #6b5336;
   border-radius: 16rpx;
   padding: 32rpx;
@@ -3161,6 +3214,13 @@ export default {
   flex-direction: column;
   align-items: center;
   margin-bottom: 20rpx;
+}
+
+.victory-wax-seal {
+  width: 120rpx;
+  height: 120rpx;
+  margin-bottom: 12rpx;
+  filter: drop-shadow(0 6rpx 14rpx rgba(185, 28, 28, 0.6));
 }
 
 .stamp-char {

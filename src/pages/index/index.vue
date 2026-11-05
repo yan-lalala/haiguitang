@@ -1587,11 +1587,11 @@ export default {
   align-items: center;
   padding: 20rpx 28rpx;
   padding-top: calc(env(safe-area-inset-top, 0px) + 20rpx);
-  background-color: #14121a;
-  background-image: url('/static/figma/leather_bg.png');
-  background-repeat: repeat;
-  border-bottom: 2rpx solid #4a3a2a;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.7);
+  background: linear-gradient(180deg, #18141e 0%, #110e16 100%);
+  border-bottom: 2rpx solid #3d3023;
+  box-shadow: 
+    0 4rpx 24rpx rgba(0, 0, 0, 0.8),
+    inset 0 -1px 0 rgba(212, 175, 55, 0.12);
   z-index: 10;
   position: relative;
 }
@@ -1615,21 +1615,22 @@ export default {
 .manor-case-num {
   font-size: 18rpx;
   letter-spacing: 2rpx;
-  color: #927e65;
-  font-weight: 700;
+  color: #c5a059;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .case-title-text {
-  font-size: 30rpx;
+  font-size: 32rpx;
   font-weight: 900;
-  color: #ecd9bc;
+  color: #f7ede0;
   letter-spacing: 1rpx;
-  text-shadow: 0 2rpx 8rpx rgba(0,0,0,0.8);
+  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.9);
 }
 
 .switch-chevron {
   font-size: 20rpx;
-  color: #927e65;
+  color: #c5a059;
 }
 
 .header-actions {
@@ -1974,10 +1975,10 @@ export default {
 .clue-corkboard {
   background: #18151f;
   background-image: 
-    linear-gradient(135deg, rgba(24, 21, 31, 0.94), rgba(20, 16, 14, 0.96)),
-    url('/static/figma/leather_bg.png');
-  background-size: repeat;
-  border: 3rpx solid #4a3b2c;
+    radial-gradient(circle, rgba(197, 160, 89, 0.1) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(26, 21, 31, 0.8) 0%, rgba(18, 14, 22, 0.95) 100%);
+  background-size: 24px 24px, 100% 100%;
+  border: 2rpx solid #3d3023;
   border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 32rpx;
@@ -2464,11 +2465,11 @@ export default {
   gap: 16rpx;
   padding: 18rpx 24rpx;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 18rpx);
-  background-color: #120f17;
-  background-image: url('/static/figma/leather_bg.png');
-  background-repeat: repeat;
-  border-top: 2rpx solid #4a3a2a;
-  box-shadow: 0 -8rpx 30rpx rgba(0,0,0,0.85);
+  background: linear-gradient(180deg, #16121b 0%, #0d0a11 100%);
+  border-top: 2rpx solid #3d3023;
+  box-shadow: 
+    0 -8rpx 32rpx rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(212, 175, 55, 0.12);
   z-index: 10;
 }
 
@@ -2483,7 +2484,7 @@ export default {
   border-radius: 12rpx;
   padding: 8rpx 20rpx;
   line-height: 1.2;
-  box-shadow: 0 4rpx 14rpx rgba(185, 28, 28, 0.4);
+  box-shadow: 0 4rpx 14rpx rgba(185, 28, 28, 0.45), inset 0 1rpx 0 rgba(255, 255, 255, 0.15);
 }
 
 .verdict-icon {
@@ -2501,10 +2502,10 @@ export default {
   display: flex;
   align-items: center;
   background: #09080c;
-  border: 2rpx solid #423627;
+  border: 2rpx solid #382c20;
   border-radius: 12rpx;
   padding: 6rpx 12rpx;
-  box-shadow: inset 0 4rpx 10rpx rgba(0,0,0,0.9);
+  box-shadow: inset 0 4rpx 12rpx rgba(0,0,0,0.9);
 }
 
 .desk-input {
@@ -2516,7 +2517,7 @@ export default {
 }
 
 .seal-send-btn {
-  background: #3f3223;
+  background: linear-gradient(135deg, #443525, #2f2317);
   color: #eddac0;
   border: 1px solid #735a3d;
   font-size: 26rpx;

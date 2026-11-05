@@ -886,7 +886,17 @@ export default {
           this.currentSoupIndex = idx;
           this.unlockedClueIds = [];
           this.history = [];
-          uni.showToast({ title: '案卷已被同步切换！', icon: 'none' });
+          this.sanValue = 100;
+          this.truthAttemptInput = '';
+          this.isDirectlyRevealed = false;
+          this.showCaseSelector = false;
+          this.showSolveModal = false;
+          this.showCaseSolvedModal = false;
+          uni.showToast({ 
+            title: `同伴已开启新案卷《${this.allSoups[idx].title}》！`, 
+            icon: 'none',
+            duration: 2500
+          });
         }
       });
 

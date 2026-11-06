@@ -331,8 +331,10 @@
             <text class="presets-title">⚡ 一键填入主流大模型参数：</text>
             <view class="presets-pills">
               <view class="preset-pill" @tap="applyPreset('deepseek')">DeepSeek</view>
+              <view class="preset-pill" @tap="applyPreset('gemini')">Gemini</view>
               <view class="preset-pill" @tap="applyPreset('kimi')">Kimi (月之暗面)</view>
               <view class="preset-pill" @tap="applyPreset('glm')">智谱GLM-4</view>
+              <view class="preset-pill" @tap="applyPreset('qwen')">通义千问</view>
               <view class="preset-pill" @tap="applyPreset('openai')">OpenAI</view>
             </view>
           </view>
@@ -1316,10 +1318,12 @@ export default {
       this.isGeneratingCase = true;
       uni.showLoading({ title: '大模型正在虚空织造案卷...' });
       try {
+        const existingTitles = this.allSoups.map(s => s.title);
         const newCase = await generateAICase({
           theme: this.aiGenerateTheme.trim() || '随机未知',
           category: this.aiGenerateCategory,
-          apiConfig: this.apiConfig
+          apiConfig: this.apiConfig,
+          existingTitles
         });
         uni.hideLoading();
 
@@ -1338,12 +1342,28 @@ export default {
         this.showCaseSelector = false;
         this.aiGenerateTheme = '';
 
-        uni.showModal({
-          title: '✨ 绝密案卷降临！',
-          content: `《${newCase.title}》已织造完成！\n【风格】：${newCase.category} · ${newCase.difficulty}\n大模型已作为第一主理人就绪，请开始向它发问！`,
-          showCancel: false,
-          confirmText: '踏入迷雾'
-        });
+        if (newCase.isLiveLLM) {
+          uni.showModal({
+            title: '✨ 绝密案卷降临！',
+            content: `大模型【${this.apiConfig.model || 'AI'}】现场编织完成！\n案卷：《${newCase.title}》\n风格：${newCase.category} · ${newCase.difficulty}\n大模型已作为第一主理人就绪，请开始向它发问！`,
+            showCancel: false,
+            confirmText: '踏入迷雾'
+          });
+        } else if (newCase.llmError) {
+          uni.showModal({
+            title: '⚠️ 大模型推演受阻',
+            content: `大模型接口调用未成功（原因: ${newCase.llmError}）。\n已自动为您从庄园绝密古卷库织造全新案卷《${newCase.title}》！\n\n💡 提示：如需使用真实大模型，请点击右上角⚙设置检查 Endpoint、密钥及模型名称。`,
+            showCancel: false,
+            confirmText: '阅览新卷宗'
+          });
+        } else {
+          uni.showModal({
+            title: '🕯️ 绝密案卷降临！',
+            content: `已为您织造全新案卷《${newCase.title}》！\n风格：${newCase.category} · ${newCase.difficulty}\n庄园管家已就绪，请开始向它发问！`,
+            showCancel: false,
+            confirmText: '踏入迷雾'
+          });
+        }
       } catch (err) {
         uni.hideLoading();
         uni.showToast({ title: '织造案卷失败，请重试', icon: 'none' });
@@ -1379,6 +1399,10 @@ export default {
         this.apiConfig.endpoint = 'https://api.deepseek.com/v1/chat/completions';
         this.apiConfig.model = 'deepseek-chat';
         uni.showToast({ title: '已填入 DeepSeek 预设，请填入 Key', icon: 'none' });
+      } else if (type === 'gemini') {
+        this.apiConfig.endpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+        this.apiConfig.model = 'gemini-1.5-flash';
+        uni.showToast({ title: '已填入 Google Gemini 预设，请填入 Key', icon: 'none' });
       } else if (type === 'kimi') {
         this.apiConfig.endpoint = 'https://api.moonshot.cn/v1/chat/completions';
         this.apiConfig.model = 'moonshot-v1-8k';
@@ -1387,6 +1411,10 @@ export default {
         this.apiConfig.endpoint = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
         this.apiConfig.model = 'glm-4-flash';
         uni.showToast({ title: '已填入 智谱GLM 预设，请填入 Key', icon: 'none' });
+      } else if (type === 'qwen') {
+        this.apiConfig.endpoint = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+        this.apiConfig.model = 'qwen-plus';
+        uni.showToast({ title: '已填入 通义千问 预设，请填入 Key', icon: 'none' });
       } else if (type === 'openai') {
         this.apiConfig.endpoint = 'https://api.openai.com/v1/chat/completions';
         this.apiConfig.model = 'gpt-4o-mini';
@@ -1400,18 +1428,44 @@ export default {
       }
       uni.showLoading({ title: '正在连接大模型...' });
       try {
-        const res = await fetch(this.apiConfig.endpoint || 'https://api.deepseek.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiConfig.apiKey.trim()}`
-          },
-          body: JSON.stringify({
-            model: this.apiConfig.model || 'deepseek-chat',
-            messages: [{ role: 'user', content: '测试' }],
-            max_tokens: 5
-          })
-        });
+        const isBrowser = typeof window !== 'undefined';
+        let res;
+        let errData = {};
+        
+        // 优先走服务端代理，避免浏览器端 CORS 拦截
+        if (isBrowser) {
+          try {
+            res = await fetch('/api/llm/proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                endpoint: this.apiConfig.endpoint || 'https://api.deepseek.com/v1/chat/completions',
+                apiKey: this.apiConfig.apiKey.trim(),
+                body: {
+                  model: this.apiConfig.model || 'deepseek-chat',
+                  messages: [{ role: 'user', content: '测试' }],
+                  max_tokens: 5
+                }
+              })
+            });
+          } catch (e) {}
+        }
+
+        if (!res) {
+          res = await fetch(this.apiConfig.endpoint || 'https://api.deepseek.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiConfig.apiKey.trim()}`
+            },
+            body: JSON.stringify({
+              model: this.apiConfig.model || 'deepseek-chat',
+              messages: [{ role: 'user', content: '测试' }],
+              max_tokens: 5
+            })
+          });
+        }
+
         uni.hideLoading();
         if (res.ok) {
           uni.showModal({
@@ -1421,10 +1475,10 @@ export default {
             confirmText: '太棒了'
           });
         } else {
-          const errData = await res.json().catch(() => ({}));
+          errData = await res.json().catch(() => ({}));
           uni.showModal({
             title: '❌ 连接异常',
-            content: `状态码: ${res.status}\n原因: ${errData.error?.message || '密钥无效或接口不可达'}`,
+            content: `状态码: ${res.status}\n原因: ${errData.error?.message || errData.message || '密钥无效或模型不存在'}`,
             showCancel: false
           });
         }

@@ -26,9 +26,62 @@ const MIME_TYPES = {
 
 // 创建统一的 HTTP 服务器（既托管静态 H5 游戏，又提供健康检查与 WebSocket 握手）
 const server = http.createServer((req, res) => {
+  // 跨域支持 (CORS)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   if (req.url === '/health' || req.url === '/ping') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
+    return;
+  }
+
+  // 服务端 LLM 代理转发（彻底消除浏览器 CORS 限制）
+  if (req.url === '/api/llm/proxy' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const { endpoint, apiKey, body: reqBody } = payload;
+        if (!endpoint || !apiKey) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: { message: '缺少 endpoint 或 apiKey 参数' } }));
+          return;
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25000);
+
+        try {
+          const apiRes = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey.trim()}`
+            },
+            body: JSON.stringify(reqBody),
+            signal: controller.signal
+          });
+
+          const data = await apiRes.text();
+          res.writeHead(apiRes.status, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(data);
+        } finally {
+          clearTimeout(timeout);
+        }
+      } catch (proxyErr) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: { message: `服务端代理请求失败: ${proxyErr.message}` } }));
+      }
+    });
     return;
   }
 
